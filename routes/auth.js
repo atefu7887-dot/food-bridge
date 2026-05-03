@@ -9,11 +9,9 @@ router.post('/login', async (req, res) => {
     try {
         const user = await User.findOne({ email });
 
-
         if (!user) {
             return res.status(400).json({ message: "Email not registered" });
         }
-
 
         if (user.password !== password) {
             return res.status(400).json({ message: "Incorrect password"});
@@ -21,7 +19,11 @@ router.post('/login', async (req, res) => {
 
         res.status(200).json({
             message: "Login successful! ✅",
-            user: { username: user.username, email: user.email }
+            user: { 
+                username: user.username, 
+                email: user.email, 
+                role: user.role 
+            }
         });
 
     } catch (err) {
@@ -30,21 +32,27 @@ router.post('/login', async (req, res) => {
 });
 
 
+// --- إنشاء حساب (Register) ---
 router.post('/register', async (req, res) => {
-    const { username, email, password, phone } = req.body;
+    const { username, email, password, phone, role } = req.body;
 
     try {
-
         const existingUser = await User.findOne({ email });
         if (existingUser) {
             return res.status(400).json({ message:"This email is already registered." });
+        }
+
+   
+        if (!['Donor', 'Receiver', 'Volunteer'].includes(role)) {
+            return res.status(400).json({ message: "Invalid role selected." });
         }
 
         const newUser = new User({
             username,
             email,
             password,
-            phone
+            phone,
+            role 
         });
 
         await newUser.save();
