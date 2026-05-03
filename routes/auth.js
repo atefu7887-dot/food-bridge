@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const User = require('../models/User'); 
+const User = require('../models/User');
 
 // --- تسجيل الدخول (Login) ---
 router.post('/login', async (req, res) => {
@@ -9,19 +9,19 @@ router.post('/login', async (req, res) => {
     try {
         const user = await User.findOne({ email });
 
-        // التأكد من وجود المستخدم
+
         if (!user) {
             return res.status(400).json({ message: "الايميل غير مسجل" });
         }
 
-        // التأكد من كلمة المرور (مقارنة عادية)
+
         if (user.password !== password) {
             return res.status(400).json({ message: "كلمة المرور خطأ" });
         }
 
-        res.status(200).json({ 
-            message: "تم تسجيل الدخول بنجاح! ✅", 
-            user: { username: user.username, email: user.email } 
+        res.status(200).json({
+            message: "تم تسجيل الدخول بنجاح! ✅",
+            user: { username: user.username, email: user.email }
         });
 
     } catch (err) {
@@ -29,12 +29,12 @@ router.post('/login', async (req, res) => {
     }
 });
 
-// --- إنشاء حساب جديد (Register) ---
+
 router.post('/register', async (req, res) => {
     const { username, email, password, phone } = req.body;
 
     try {
-        // التأكد إن الايميل مش مستخدم قبل كدة
+
         const existingUser = await User.findOne({ email });
         if (existingUser) {
             return res.status(400).json({ message: "هذا الايميل مسجل بالفعل" });
