@@ -12,10 +12,12 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 
 const authRoutes = require('./routes/auth');
+const forgetRouter = require('./routes/forgot_password');
 
 mongoose.connect(process.env.MONGO_URI);
 
 app.use('/auth', authRoutes);
+app.use('/auth', forgetRouter);
 
 mongoose.connection.on('connected', () => {
     console.log('🟢 Connected to MongoDB');
