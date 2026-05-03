@@ -34,33 +34,81 @@ router.post('/login', async (req, res) => {
 
 // --- إنشاء حساب (Register) ---
 router.post('/register', async (req, res) => {
-    const { username, email, password, phone, role } = req.body;
+  try {
+    const { 
+      username, 
+      email, 
+      phone, 
+      password, 
+      role, 
+      donorType, 
+      businessName, 
+      fullName, 
+      address,
+      commercialRegisterNumber, 
+      businessPhone,           
+      photos 
+    } = req.body;
 
-    try {
-        const existingUser = await User.findOne({ email });
-        if (existingUser) {
-            return res.status(400).json({ message:"This email is already registered." });
-        }
+    if (!username || !email || !phone || !password || !role) {
+      return res.status(400).json({
+        success: false,
+        message: 'All required fields must be filled'
+      });
+    }
 
    
-        if (!['Donor', 'Receiver', 'Volunteer'].includes(role)) {
-            return res.status(400).json({ message: "Invalid role selected." });
-        }
-
-        const newUser = new User({
-            username,
-            email,
-            password,
-            phone,
-            role 
-        });
-
-        await newUser.save();
-        res.status(201).json({ message:"Account created successfully! 🎉"});
-
-    } catch (err) {
-        res.status(500).json({ message: "Account creation failed", error: err.message });
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email already exists'
+      });
     }
+
+  
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+   
+    let userData = {
+      username,
+      email,
+      phone,
+      password: hashedPassword,
+      role,
+    };
+
+    
+    if (role === 'Donor') {
+      userData.donorType = donorType;
+      userData.address = address;
+      userData.photos = photos || [];
+
+     
+      if (donorType === 'Restaurant' || donorType === 'Bakery') {
+        userData.businessName = businessName;
+        userData.commercialRegisterNumber = commercialRegisterNumber; 
+        userData.businessPhone = businessPhone; 
+      } else if (donorType === 'Individual') {
+        userData.fullName = fullName;
+      }
+    }
+
+    const newUser = new User(userData);
+    await newUser.save();
+
+    res.status(201).json({
+      success: true,
+      message: 'Account Created Successfully!',
+      user: newUser
+    });
+  } catch (error) {
+    console.error('Register Error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error occurred'
+    });
+  }
 });
 
 module.exports = router;
