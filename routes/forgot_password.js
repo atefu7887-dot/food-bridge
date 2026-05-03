@@ -102,4 +102,43 @@ router.post('/reset-password', async (req, res) => {
     }
 });
 
+router.post('/resend-code', async (req, res) => {
+    try {
+        const { email } = req.body;
+
+        const user = await User.findOne({ email });
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        user.resetPasswordOtp = otp;
+        user.resetPasswordExpire = Date.now() + 10 * 60 * 1000;
+        await user.save();
+
+        const transporter = nodemailer.createTransport({
+            service: 'Gmail',
+            auth: {
+                user: 'atefu7887@gmail.com',
+                pass: 'spcp xjmf kbbt gvqf',
+            },
+        });
+
+        const mailOptions = {
+            to: user.email,
+            subject: 'FoodBridge - Password Reset Code',
+            text: `Your new verification code is: ${otp}. This code is valid for 10 minutes.`,
+        };
+
+        await transporter.sendMail(mailOptions);
+
+        return res.status(200).json({
+            success: true,
+            message: 'A new code has been successfully sent to your email.',
+        });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: error.message });
+    }
+});
+
 module.exports = router;
