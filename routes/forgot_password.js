@@ -12,8 +12,7 @@ router.post('/forgot-password', async (req, res) => {
         if (!user) {
             return res.status(404).json({ success: false, message: 'User not found' });
         }
-        
-        // توليد 4 أرقام
+
         const otp = Math.floor(1000 + Math.random() * 9000).toString();
         user.resetPasswordOtp = otp;
         user.resetPasswordExpire = Date.now() + 10 * 60 * 1000;
@@ -109,7 +108,7 @@ router.post('/resend-code', async (req, res) => {
             return res.status(404).json({ success: false, message: 'User not found' });
         }
 
-        // تم التعديل هنا ليولد 4 أرقام
+
         const otp = Math.floor(1000 + Math.random() * 9000).toString();
         user.resetPasswordOtp = otp;
         user.resetPasswordExpire = Date.now() + 10 * 60 * 1000;
