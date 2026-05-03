@@ -11,21 +11,21 @@ router.post('/login', async (req, res) => {
 
 
         if (!user) {
-            return res.status(400).json({ message: "الايميل غير مسجل" });
+            return res.status(400).json({ message: "Email not registered" });
         }
 
 
         if (user.password !== password) {
-            return res.status(400).json({ message: "كلمة المرور خطأ" });
+            return res.status(400).json({ message: "Incorrect password"});
         }
 
         res.status(200).json({
-            message: "تم تسجيل الدخول بنجاح! ✅",
+            message: "Login successful! ✅",
             user: { username: user.username, email: user.email }
         });
 
     } catch (err) {
-        res.status(500).json({ message: "خطأ في السيرفر" });
+        res.status(500).json({ message: "Server error" });
     }
 });
 
@@ -37,7 +37,7 @@ router.post('/register', async (req, res) => {
 
         const existingUser = await User.findOne({ email });
         if (existingUser) {
-            return res.status(400).json({ message: "هذا الايميل مسجل بالفعل" });
+            return res.status(400).json({ message:"This email is already registered." });
         }
 
         const newUser = new User({
@@ -48,10 +48,10 @@ router.post('/register', async (req, res) => {
         });
 
         await newUser.save();
-        res.status(201).json({ message: "تم إنشاء الحساب بنجاح! 🎉" });
+        res.status(201).json({ message:"Account created successfully! 🎉"});
 
     } catch (err) {
-        res.status(500).json({ message: "فشل إنشاء الحساب", error: err.message });
+        res.status(500).json({ message: "Account creation failed", error: err.message });
     }
 });
 
