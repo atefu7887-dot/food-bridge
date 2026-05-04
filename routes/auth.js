@@ -1,14 +1,14 @@
 const express = require('express');
-const bcrypt = require('bcrypt'); // تم استدعاؤها لتشفير وفحص كلمة المرور
-const multer = require('multer'); // تم استدعاؤها لاستقبال الملفات المرفوعة
+const bcrypt = require('bcrypt');
+const multer = require('multer');
 const User = require('../models/User');
 
 const router = express.Router();
 
-// إعداد التخزين المؤقت للملفات (الصور)
+// إعداد التخزين المؤقت للملفات
 const upload = multer({ dest: 'uploads/' });
 
-// --- تسجيل الدخول (Login) ---
+// --- تسجيل الدخول ---
 router.post('/login', async (req, res) => {
     const { email, password } = req.body;
 
@@ -19,7 +19,6 @@ router.post('/login', async (req, res) => {
             return res.status(400).json({ message: "Email not registered" });
         }
 
-        // مقارنة كلمة المرور المدخلة بكلمة المرور المشفرة
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
             return res.status(400).json({ message: "Incorrect password" });
@@ -33,16 +32,13 @@ router.post('/login', async (req, res) => {
                 role: user.role 
             }
         });
-
     } catch (err) {
         console.error('Login Error:', err);
         res.status(500).json({ message: "Server error" });
     }
 });
 
-
-// --- إنشاء حساب (Register) ---
-// استخدام upload.array لاستقبال الصور
+// --- إنشاء حساب ---
 router.post('/register', upload.array('photos', 5), async (req, res) => {
     try {
         const { 
@@ -67,7 +63,6 @@ router.post('/register', upload.array('photos', 5), async (req, res) => {
             });
         }
 
-        // التحقق من وجود الحساب مسبقاً
         const existingUser = await User.findOne({ email });
         if (existingUser) {
             return res.status(400).json({
@@ -76,7 +71,7 @@ router.post('/register', upload.array('photos', 5), async (req, res) => {
             });
         }
 
-        // تشفير كلمة المرور
+        // التشفير
         const hashedPassword = await bcrypt.hash(password, 10);
 
         let userData = {
@@ -87,12 +82,11 @@ router.post('/register', upload.array('photos', 5), async (req, res) => {
             role,
         };
 
-        // معالجة بيانات المتبرع
         if (role === 'Donor') {
             userData.donorType = donorType;
             userData.address = address;
 
-            // إضافة الصور المرفوعة إلى قاعدة البيانات
+            // حفظ أسماء الصور
             if (req.files && req.files.length > 0) {
                 userData.photos = req.files.map(file => file.filename);
             } else {
@@ -101,7 +95,7 @@ router.post('/register', upload.array('photos', 5), async (req, res) => {
 
             if (donorType === 'Restaurant' || donorType === 'Bakery') {
                 userData.businessName = businessName;
-                userData.commercialRegisterNumber = commercialRegisterNumber; 
+                userData.commercialRegisterNumber = commercialRegisterNumber;
                 userData.businessPhone = businessPhone; 
             } else if (donorType === 'Individual') {
                 userData.fullName = fullName;
