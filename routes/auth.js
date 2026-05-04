@@ -1,6 +1,12 @@
 const express = require('express');
-const router = express.Router();
+const bcrypt = require('bcrypt'); // تم استدعاؤها لتشفير وفحص كلمة المرور
+const multer = require('multer'); // تم استدعاؤها لاستقبال الملفات المرفوعة
 const User = require('../models/User');
+
+const router = express.Router();
+
+// إعداد التخزين المؤقت للملفات (الصور)
+const upload = multer({ dest: 'uploads/' });
 
 // --- تسجيل الدخول (Login) ---
 router.post('/login', async (req, res) => {
@@ -13,8 +19,10 @@ router.post('/login', async (req, res) => {
             return res.status(400).json({ message: "Email not registered" });
         }
 
-        if (user.password !== password) {
-            return res.status(400).json({ message: "Incorrect password"});
+        // مقارنة كلمة المرور المدخلة بكلمة المرور المشفرة
+        const isMatch = await bcrypt.compare(password, user.password);
+        if (!isMatch) {
+            return res.status(400).json({ message: "Incorrect password" });
         }
 
         res.status(200).json({
@@ -27,88 +35,94 @@ router.post('/login', async (req, res) => {
         });
 
     } catch (err) {
+        console.error('Login Error:', err);
         res.status(500).json({ message: "Server error" });
     }
 });
 
 
 // --- إنشاء حساب (Register) ---
-router.post('/register', async (req, res) => {
-  try {
-    const { 
-      username, 
-      email, 
-      phone, 
-      password, 
-      role, 
-      donorType, 
-      businessName, 
-      fullName, 
-      address,
-      commercialRegisterNumber, 
-      businessPhone,           
-      photos 
-    } = req.body;
+// استخدام upload.array لاستقبال الصور
+router.post('/register', upload.array('photos', 5), async (req, res) => {
+    try {
+        const { 
+            username, 
+            email, 
+            phone, 
+            password, 
+            role, 
+            donorType, 
+            businessName, 
+            fullName, 
+            address,
+            commercialRegisterNumber, 
+            businessPhone 
+        } = req.body;
 
-    if (!username || !email || !phone || !password || !role) {
-      return res.status(400).json({
-        success: false,
-        message: 'All required fields must be filled'
-      });
+        // التحقق من الحقول الأساسية
+        if (!username || !email || !phone || !password || !role) {
+            return res.status(400).json({
+                success: false,
+                message: 'All required fields must be filled'
+            });
+        }
+
+        // التحقق من وجود الحساب مسبقاً
+        const existingUser = await User.findOne({ email });
+        if (existingUser) {
+            return res.status(400).json({
+                success: false,
+                message: 'Email already exists'
+            });
+        }
+
+        // تشفير كلمة المرور
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        let userData = {
+            username,
+            email,
+            phone,
+            password: hashedPassword,
+            role,
+        };
+
+        // معالجة بيانات المتبرع
+        if (role === 'Donor') {
+            userData.donorType = donorType;
+            userData.address = address;
+
+            // إضافة الصور المرفوعة إلى قاعدة البيانات
+            if (req.files && req.files.length > 0) {
+                userData.photos = req.files.map(file => file.filename);
+            } else {
+                userData.photos = [];
+            }
+
+            if (donorType === 'Restaurant' || donorType === 'Bakery') {
+                userData.businessName = businessName;
+                userData.commercialRegisterNumber = commercialRegisterNumber; 
+                userData.businessPhone = businessPhone; 
+            } else if (donorType === 'Individual') {
+                userData.fullName = fullName;
+            }
+        }
+
+        const newUser = new User(userData);
+        await newUser.save();
+
+        res.status(201).json({
+            success: true,
+            message: 'Account Created Successfully!',
+            user: newUser
+        });
+    } catch (error) {
+        console.error('Register Error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Server error occurred'
+        });
     }
-
-   
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      return res.status(400).json({
-        success: false,
-        message: 'Email already exists'
-      });
-    }
-
-  
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-   
-    let userData = {
-      username,
-      email,
-      phone,
-      password: hashedPassword,
-      role,
-    };
-
-    
-    if (role === 'Donor') {
-      userData.donorType = donorType;
-      userData.address = address;
-      userData.photos = photos || [];
-
-     
-      if (donorType === 'Restaurant' || donorType === 'Bakery') {
-        userData.businessName = businessName;
-        userData.commercialRegisterNumber = commercialRegisterNumber; 
-        userData.businessPhone = businessPhone; 
-      } else if (donorType === 'Individual') {
-        userData.fullName = fullName;
-      }
-    }
-
-    const newUser = new User(userData);
-    await newUser.save();
-
-    res.status(201).json({
-      success: true,
-      message: 'Account Created Successfully!',
-      user: newUser
-    });
-  } catch (error) {
-    console.error('Register Error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error occurred'
-    });
-  }
 });
 
 module.exports = router;

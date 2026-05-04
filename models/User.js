@@ -24,56 +24,41 @@ const userSchema = new mongoose.Schema({
         enum: ['Donor', 'Receiver', 'Volunteer'],
         required: true,
     },
-
-
     donorType: {
         type: String,
         enum: ['Restaurant', 'Bakery', 'Individual'],
         default: 'Individual',
     },
-
-
     businessName: {
         type: String,
     },
-
-
     fullName: {
         type: String,
     },
-
-
     commercialRegisterNumber: {
         type: String,
     },
-
     businessPhone: {
         type: String,
     },
-
     address: {
         type: String,
     },
-
     photos: {
         type: [String],
         default: [],
     },
-
     isVerified: {
         type: Boolean,
         default: false,
     },
-
     resetPasswordOtp: {
         type: String,
     },
-
     resetPasswordExpire: {
         type: Date,
     },
 }, { timestamps: true });
 
 const User = mongoose.model('User', userSchema);
-
 module.exports = User;
