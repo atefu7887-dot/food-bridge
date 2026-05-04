@@ -99,7 +99,8 @@ router.post('/register', upload.array('photos', 5), async (req, res) => {
 
             if (donorType === 'Restaurant' || donorType === 'Bakery') {
                 userData.businessName = businessName;
-                userData.commercialRegisterNumber = RegisterNumber; 
+                // تم التصحيح هنا: استخدام commercialRegisterNumber بدلاً من RegisterNumber
+                userData.commercialRegisterNumber = commercialRegisterNumber; 
                 userData.businessPhone = businessPhone; 
             } else if (donorType === 'Individual') {
                 userData.fullName = fullName;
@@ -142,4 +143,5 @@ router.post('/register', upload.array('photos', 5), async (req, res) => {
         });
     }
 });
+
 module.exports = router;
