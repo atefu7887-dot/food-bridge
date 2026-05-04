@@ -41,7 +41,6 @@ router.post('/login', async (req, res) => {
     }
 });
 
-
 // --- إنشاء حساب (Register) ---
 router.post('/register', upload.array('photos', 5), async (req, res) => {
     try {
@@ -56,7 +55,10 @@ router.post('/register', upload.array('photos', 5), async (req, res) => {
             fullName, 
             address,
             commercialRegisterNumber, 
-            businessPhone 
+            businessPhone,
+            receiverType,
+            organizationName,
+            registrationLicenseNumber
         } = req.body;
 
         if (!username || !email || !phone || !password || !role) {
@@ -84,13 +86,12 @@ router.post('/register', upload.array('photos', 5), async (req, res) => {
             role,
         };
 
+        // معالجة بيانات المتبرع
         if (role === 'Donor') {
             userData.donorType = donorType;
             userData.address = address;
 
-   
             if (req.files && req.files.length > 0) {
-        
                 userData.photos = req.files.map(file => `${Date.now()}-${file.originalname}`);
             } else {
                 userData.photos = [];
@@ -98,9 +99,28 @@ router.post('/register', upload.array('photos', 5), async (req, res) => {
 
             if (donorType === 'Restaurant' || donorType === 'Bakery') {
                 userData.businessName = businessName;
-                userData.commercialRegisterNumber = commercialRegisterNumber; 
+                userData.commercialRegisterNumber = RegisterNumber; 
                 userData.businessPhone = businessPhone; 
             } else if (donorType === 'Individual') {
+                userData.fullName = fullName;
+            }
+        } 
+        
+        // معالجة بيانات المستلم
+        else if (role === 'Receiver') {
+            userData.receiverType = receiverType;
+            userData.address = address;
+
+            if (req.files && req.files.length > 0) {
+                userData.photos = req.files.map(file => `${Date.now()}-${file.originalname}`);
+            } else {
+                userData.photos = [];
+            }
+
+            if (receiverType === 'Trust' || receiverType === 'NGO') {
+                userData.organizationName = organizationName;
+                userData.registrationLicenseNumber = registrationLicenseNumber;
+            } else if (receiverType === 'Individual') {
                 userData.fullName = fullName;
             }
         }
@@ -113,6 +133,7 @@ router.post('/register', upload.array('photos', 5), async (req, res) => {
             message: 'Account Created Successfully!',
             user: newUser
         });
+
     } catch (error) {
         console.error('Register Error:', error);
         res.status(500).json({
