@@ -1,12 +1,18 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
 const multer = require('multer');
+const path = require('path');
+const os = require('os');
 const User = require('../models/User');
 
 const router = express.Router();
 
-// إعداد التخزين المؤقت للملفات
-const upload = multer({ dest: 'uploads/' });
+// --- تعديل مهم جداً لـ Vercel ---
+// نستخدم المجلد /tmp/ لأنه المكان الوحيد المسموح بالكتابة فيه
+const upload = multer({ 
+    dest: path.join(os.tmpdir(), 'uploads') 
+});
+// --------------------------------
 
 // --- تسجيل الدخول ---
 router.post('/login', async (req, res) => {
@@ -14,7 +20,6 @@ router.post('/login', async (req, res) => {
 
     try {
         const user = await User.findOne({ email });
-
         if (!user) {
             return res.status(400).json({ message: "Email not registered" });
         }
@@ -55,7 +60,6 @@ router.post('/register', upload.array('photos', 5), async (req, res) => {
             businessPhone 
         } = req.body;
 
-        // التحقق من الحقول الأساسية
         if (!username || !email || !phone || !password || !role) {
             return res.status(400).json({
                 success: false,
@@ -71,7 +75,6 @@ router.post('/register', upload.array('photos', 5), async (req, res) => {
             });
         }
 
-        // التشفير
         const hashedPassword = await bcrypt.hash(password, 10);
 
         let userData = {
@@ -86,7 +89,6 @@ router.post('/register', upload.array('photos', 5), async (req, res) => {
             userData.donorType = donorType;
             userData.address = address;
 
-            // حفظ أسماء الصور
             if (req.files && req.files.length > 0) {
                 userData.photos = req.files.map(file => file.filename);
             } else {
