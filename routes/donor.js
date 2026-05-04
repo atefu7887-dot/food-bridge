@@ -13,7 +13,6 @@ rrouter.get('/donors', async (req, res) => {
             query.donorType = donorType;
         }
 
-        // هنا نحدد الحقول التي نريد إرجاعها فقط
         // سيقوم Mongoose بإرجاع الـ _id بشكل افتراضي بالإضافة للحقول المحددة
         const donors = await User.find(query).select('businessName phone address');
 
