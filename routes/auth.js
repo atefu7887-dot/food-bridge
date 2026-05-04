@@ -54,7 +54,6 @@ router.post('/register', upload.array('photos', 5), async (req, res) => {
             businessName, 
             fullName, 
             address,
-            businessPhone,
             receiverType
         } = req.body;
 
@@ -96,7 +95,6 @@ router.post('/register', upload.array('photos', 5), async (req, res) => {
 
             if (donorType === 'Restaurant' || donorType === 'Bakery') {
                 userData.businessName = businessName;
-                userData.businessPhone = businessPhone; 
             } else if (donorType === 'Individual') {
                 userData.fullName = fullName;
             }
@@ -114,7 +112,7 @@ router.post('/register', upload.array('photos', 5), async (req, res) => {
             }
 
             if (receiverType === 'Trust' || receiverType === 'NGO') {
-                // الحقول غير موجودة في الـ Schema الجديدة
+                userData.businessName = businessName;
             } else if (receiverType === 'Individual') {
                 userData.fullName = fullName;
             }

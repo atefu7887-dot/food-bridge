@@ -42,9 +42,7 @@ const userSchema = new mongoose.Schema({
     fullName: {
         type: String,
     },
-    businessPhone: {
-        type: String,
-    },
+   
     address: {
         type: String,
     },
