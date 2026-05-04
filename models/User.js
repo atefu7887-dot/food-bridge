@@ -36,9 +36,7 @@ const userSchema = new mongoose.Schema({
         type: String,
         enum: ['Trust', 'NGO', 'Individual'],
     },
-    fullName: {
-        type: String,
-    },
+
     address: {
         type: String,
     },

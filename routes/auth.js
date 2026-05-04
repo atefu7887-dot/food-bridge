@@ -55,7 +55,6 @@ router.post('/register', upload.array('photos', 5), async (req, res) => {
             role, 
             donorType, 
             businessName, 
-            fullName, 
             address,
             receiverType
         } = req.body;
@@ -100,8 +99,6 @@ router.post('/register', upload.array('photos', 5), async (req, res) => {
 
             if (donorType === 'Restaurant' || donorType === 'Bakery') {
                 userData.businessName = businessName;
-            } else if (donorType === 'Individual') {
-                userData.fullName = fullName;
             }
         } 
         // معالجة بيانات المستلم
@@ -117,8 +114,6 @@ router.post('/register', upload.array('photos', 5), async (req, res) => {
 
             if (receiverType === 'Trust' || receiverType === 'NGO') {
                 userData.businessName = businessName;
-            } else if (receiverType === 'Individual') {
-                userData.fullName = fullName;
             }
         }
 
