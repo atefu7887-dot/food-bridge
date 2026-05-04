@@ -1,39 +1,39 @@
 const express = require('express');
 const mongoose = require('mongoose');
+const path = require('path');
+require('dotenv').config(); 
 
 const app = express();
 
+// --- PORT ---
+const PORT = process.env.PORT || 3000; 
+
+
 app.use(express.json());
 
-// routes
 const authRoutes = require('./routes/auth');
 const forgetRouter = require('./routes/forgot_password');
 const receiversRouter = require('./routes/receivers');
 const donorRouter = require('./routes/donor');
 
-// routes usage
+mongoose.connect(process.env.MONGO_URI);
+
 app.use('/auth', authRoutes);
 app.use('/auth', forgetRouter);
 app.use('/api', receiversRouter);
 app.use('/api', donorRouter);
 
-// اتصال الداتا بيز (بدون تكرار)
-let isConnected = false;
+mongoose.connection.on('connected', () => {
+    console.log('🟢 Connected to MongoDB');
+});
 
-const connectDB = async () => {
-  if (isConnected) return;
+mongoose.connection.on('error', (err) => {
+    console.error('🔴 MongoDB connection error:', err);
+});
 
-  try {
-    await mongoose.connect(process.env.MONGO_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    });
 
-    isConnected = true;
-    console.log("🟢 MongoDB Connected");
-  } catch (err) {
-    console.error("🔴 DB Error:", err);
-  }
-};
+app.listen(PORT, () => {
+    console.log(`🚀 Server is running on port ${PORT}`);
+});
 
-module.exports = { app, connectDB };
+module.exports = app;
