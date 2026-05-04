@@ -24,7 +24,6 @@ const userSchema = new mongoose.Schema({
         enum: ['Donor', 'Receiver', 'Volunteer'],
         required: true,
     },
-    
     donorType: {
         type: String,
         enum: ['Restaurant', 'Bakery', 'Individual'],
@@ -33,16 +32,13 @@ const userSchema = new mongoose.Schema({
     businessName: {
         type: String,
     },
-    
     receiverType: {
         type: String,
         enum: ['Trust', 'NGO', 'Individual'],
     },
-
     fullName: {
         type: String,
     },
-   
     address: {
         type: String,
     },

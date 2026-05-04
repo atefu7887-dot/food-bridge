@@ -43,6 +43,9 @@ router.post('/login', async (req, res) => {
 
 // --- إنشاء حساب (Register) ---
 router.post('/register', upload.array('photos', 5), async (req, res) => {
+    console.log('Received Body:', req.body); // طباعة الحقول للتأكد من وصولها
+    console.log('Received Files:', req.files); // طباعة الملفات
+
     try {
         const { 
             username, 
@@ -57,10 +60,12 @@ router.post('/register', upload.array('photos', 5), async (req, res) => {
             receiverType
         } = req.body;
 
+        // التحقق من الحقول الأساسية
         if (!username || !email || !phone || !password || !role) {
             return res.status(400).json({
                 success: false,
-                message: 'All required fields must be filled'
+                message: 'All required fields must be filled',
+                details: { username, email, phone, password, role }
             });
         }
 
@@ -84,7 +89,7 @@ router.post('/register', upload.array('photos', 5), async (req, res) => {
 
         // معالجة بيانات المتبرع
         if (role === 'Donor') {
-            userData.donorType = donorType;
+            userData.donorType = donorType || 'Individual';
             userData.address = address;
 
             if (req.files && req.files.length > 0) {
@@ -99,7 +104,6 @@ router.post('/register', upload.array('photos', 5), async (req, res) => {
                 userData.fullName = fullName;
             }
         } 
-        
         // معالجة بيانات المستلم
         else if (role === 'Receiver') {
             userData.receiverType = receiverType;
@@ -131,7 +135,8 @@ router.post('/register', upload.array('photos', 5), async (req, res) => {
         console.error('Register Error:', error);
         res.status(500).json({
             success: false,
-            message: 'Server error occurred'
+            message: 'Server error occurred',
+            error: error.message
         });
     }
 });
