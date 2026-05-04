@@ -12,7 +12,8 @@ router.get('/donors', async (req, res) => {
             query.donorType = donorType;
         }
 
-        const donors = await User.find(query).select('businessName phone address');
+     
+        const donors = await User.find(query).select('businessName phone address photos');
 
         res.status(200).json({
             success: true,
