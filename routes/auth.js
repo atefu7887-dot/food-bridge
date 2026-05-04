@@ -1,18 +1,15 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
 const multer = require('multer');
-const path = require('path');
-const os = require('os');
 const User = require('../models/User');
 
 const router = express.Router();
 
-// --- تعديل مهم جداً لـ Vercel ---
-// نستخدم المجلد /tmp/ لأنه المكان الوحيد المسموح بالكتابة فيه
+// --- 1. استخدام الذاكرة المؤقتة (Memory Storage) بدلاً من القرص ---
 const upload = multer({ 
-    dest: path.join(os.tmpdir(), 'uploads') 
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 5 * 1024 * 1024 } // الحد الأقصى لحجم الصورة 5 ميجابايت
 });
-// --------------------------------
 
 // --- تسجيل الدخول ---
 router.post('/login', async (req, res) => {
@@ -20,6 +17,7 @@ router.post('/login', async (req, res) => {
 
     try {
         const user = await User.findOne({ email });
+
         if (!user) {
             return res.status(400).json({ message: "Email not registered" });
         }
@@ -37,13 +35,15 @@ router.post('/login', async (req, res) => {
                 role: user.role 
             }
         });
+
     } catch (err) {
         console.error('Login Error:', err);
         res.status(500).json({ message: "Server error" });
     }
 });
 
-// --- إنشاء حساب ---
+
+// --- إنشاء حساب (Register) ---
 router.post('/register', upload.array('photos', 5), async (req, res) => {
     try {
         const { 
@@ -89,15 +89,17 @@ router.post('/register', upload.array('photos', 5), async (req, res) => {
             userData.donorType = donorType;
             userData.address = address;
 
+            // 2. التعامل مع الملفات المحفوظة في الذاكرة
             if (req.files && req.files.length > 0) {
-                userData.photos = req.files.map(file => file.filename);
+                // نقوم بحفظ الاسم الأصلي للملف + توقيت الإنشاء
+                userData.photos = req.files.map(file => `${Date.now()}-${file.originalname}`);
             } else {
                 userData.photos = [];
             }
 
             if (donorType === 'Restaurant' || donorType === 'Bakery') {
                 userData.businessName = businessName;
-                userData.commercialRegisterNumber = commercialRegisterNumber;
+                userData.commercialRegisterNumber = commercialRegisterNumber; 
                 userData.businessPhone = businessPhone; 
             } else if (donorType === 'Individual') {
                 userData.fullName = fullName;
