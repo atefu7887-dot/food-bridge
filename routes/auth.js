@@ -5,10 +5,9 @@ const User = require('../models/User');
 
 const router = express.Router();
 
-// --- 1. استخدام الذاكرة المؤقتة (Memory Storage) بدلاً من القرص ---
 const upload = multer({ 
     storage: multer.memoryStorage(),
-    limits: { fileSize: 5 * 1024 * 1024 } // الحد الأقصى لحجم الصورة 5 ميجابايت
+    limits: { fileSize: 5 * 1024 * 1024 } 
 });
 
 // --- تسجيل الدخول ---
@@ -89,9 +88,9 @@ router.post('/register', upload.array('photos', 5), async (req, res) => {
             userData.donorType = donorType;
             userData.address = address;
 
-            // 2. التعامل مع الملفات المحفوظة في الذاكرة
+   
             if (req.files && req.files.length > 0) {
-                // نقوم بحفظ الاسم الأصلي للملف + توقيت الإنشاء
+        
                 userData.photos = req.files.map(file => `${Date.now()}-${file.originalname}`);
             } else {
                 userData.photos = [];
