@@ -1,59 +1,78 @@
 const mongoose = require('mongoose');
 
 const userSchema = new mongoose.Schema({
-    username: { type: String, required: true, trim: true },
-
+    username: {
+        type: String,
+        required: true,
+    },
     email: {
         type: String,
         required: true,
         unique: true,
         lowercase: true,
-        trim: true
     },
-
-    phone: { type: String, required: true, trim: true },
-
-    password: { type: String, required: true },
-
+    phone: {
+        type: String,
+        required: true,
+    },
+    password: {
+        type: String,
+        required: true,
+    },
     role: {
         type: String,
         enum: ['Donor', 'Receiver', 'Volunteer'],
         required: true,
     },
-
+    
     donorType: {
         type: String,
         enum: ['Restaurant', 'Bakery', 'Individual'],
         default: 'Individual',
     },
-
-    businessName: String,
+    businessName: {
+        type: String,
+    },
+    
     receiverType: {
         type: String,
         enum: ['Trust', 'NGO', 'Individual'],
     },
+    organizationName: {
+        type: String,
+    },
+    registrationLicenseNumber: {
+        type: String,
+    },
 
-    organizationName: String,
-    registrationLicenseNumber: String,
-
-    fullName: String,
-    commercialRegisterNumber: String,
-    businessPhone: String,
-    address: String,
-
+    // الحقول العامة والمشتركة
+    fullName: {
+        type: String,
+    },
+    commercialRegisterNumber: {
+        type: String,
+    },
+    businessPhone: {
+        type: String,
+    },
+    address: {
+        type: String,
+    },
     photos: {
         type: [String],
         default: [],
     },
-
     isVerified: {
         type: Boolean,
         default: false,
     },
-
-    resetPasswordOtp: String,
-    resetPasswordExpire: Date,
-
+    resetPasswordOtp: {
+        type: String,
+    },
+    resetPasswordExpire: {
+        type: Date,
+    },
 }, { timestamps: true });
 
-module.exports = mongoose.model('User', userSchema);
+const User = mongoose.model('User', userSchema);
+module.exports = User;

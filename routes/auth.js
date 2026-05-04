@@ -5,90 +5,62 @@ const User = require('../models/User');
 
 const router = express.Router();
 
-
-// ================= MULTER =================
-const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        cb(null, 'uploads/');
-    },
-    filename: function (req, file, cb) {
-        cb(null, Date.now() + '-' + file.originalname);
-    }
+const upload = multer({ 
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 5 * 1024 * 1024 } 
 });
 
-const upload = multer({ storage });
-
-
-// ================= LOGIN =================
+// --- تسجيل الدخول ---
 router.post('/login', async (req, res) => {
-    try {
-        const { email, password } = req.body;
+    const { email, password } = req.body;
 
-        const user = await User.findOne({ email: email.trim().toLowerCase() });
+    try {
+        const user = await User.findOne({ email });
 
         if (!user) {
-            return res.status(400).json({
-                success: false,
-                message: "Email not registered"
-            });
+            return res.status(400).json({ message: "Email not registered" });
         }
 
         const isMatch = await bcrypt.compare(password, user.password);
-
         if (!isMatch) {
-            return res.status(400).json({
-                success: false,
-                message: "Incorrect password"
-            });
+            return res.status(400).json({ message: "Incorrect password" });
         }
 
         res.status(200).json({
-            success: true,
-            message: "Login successful",
-            data: {
-                id: user._id,
-                username: user.username,
-                email: user.email,
-                role: user.role
+            message: "Login successful! ✅",
+            user: { 
+                username: user.username, 
+                email: user.email, 
+                role: user.role 
             }
         });
 
     } catch (err) {
         console.error('Login Error:', err);
-        res.status(500).json({
-            success: false,
-            message: "Server error"
-        });
+        res.status(500).json({ message: "Server error" });
     }
 });
 
-
-// ================= REGISTER =================
+// --- إنشاء حساب (Register) ---
 router.post('/register', upload.array('photos', 5), async (req, res) => {
     try {
-
-        let {
-            username,
-            email,
-            phone,
-            password,
-            role,
-            donorType,
-            businessName,
-            fullName,
+        const { 
+            username, 
+            email, 
+            phone, 
+            password, 
+            role, 
+            donorType, 
+            businessName, 
+            fullName, 
             address,
-            commercialRegisterNumber,
+            commercialRegisterNumber, 
             businessPhone,
             receiverType,
             organizationName,
             registrationLicenseNumber
         } = req.body;
 
-        // ===== تنظيف البيانات =====
-        email = email?.trim().toLowerCase();
-        username = username?.trim();
-
-        // ===== تحقق أساسي =====
         if (!username || !email || !phone || !password || !role) {
             return res.status(400).json({
                 success: false,
@@ -96,24 +68,7 @@ router.post('/register', upload.array('photos', 5), async (req, res) => {
             });
         }
 
-        // ===== تحقق حسب النوع =====
-        if (role === 'Donor' && !donorType) {
-            return res.status(400).json({
-                success: false,
-                message: 'Donor type required'
-            });
-        }
-
-        if (role === 'Receiver' && !receiverType) {
-            return res.status(400).json({
-                success: false,
-                message: 'Receiver type required'
-            });
-        }
-
-        // ===== تحقق من وجود المستخدم =====
         const existingUser = await User.findOne({ email });
-
         if (existingUser) {
             return res.status(400).json({
                 success: false,
@@ -121,7 +76,6 @@ router.post('/register', upload.array('photos', 5), async (req, res) => {
             });
         }
 
-        // ===== تشفير الباسورد =====
         const hashedPassword = await bcrypt.hash(password, 10);
 
         let userData = {
@@ -130,51 +84,54 @@ router.post('/register', upload.array('photos', 5), async (req, res) => {
             phone,
             password: hashedPassword,
             role,
-            address
         };
 
-        // ===== الصور =====
-        if (req.files && req.files.length > 0) {
-            userData.photos = req.files.map(file => file.filename);
-        }
-
-        // ===== Donor =====
+        // معالجة بيانات المتبرع
         if (role === 'Donor') {
             userData.donorType = donorType;
+            userData.address = address;
+
+            if (req.files && req.files.length > 0) {
+                userData.photos = req.files.map(file => `${Date.now()}-${file.originalname}`);
+            } else {
+                userData.photos = [];
+            }
 
             if (donorType === 'Restaurant' || donorType === 'Bakery') {
                 userData.businessName = businessName;
-                userData.commercialRegisterNumber = commercialRegisterNumber;
-                userData.businessPhone = businessPhone;
-            } else {
+                userData.commercialRegisterNumber = RegisterNumber; 
+                userData.businessPhone = businessPhone; 
+            } else if (donorType === 'Individual') {
                 userData.fullName = fullName;
             }
-        }
-
-        // ===== Receiver =====
-        if (role === 'Receiver') {
+        } 
+        
+        // معالجة بيانات المستلم
+        else if (role === 'Receiver') {
             userData.receiverType = receiverType;
+            userData.address = address;
+
+            if (req.files && req.files.length > 0) {
+                userData.photos = req.files.map(file => `${Date.now()}-${file.originalname}`);
+            } else {
+                userData.photos = [];
+            }
 
             if (receiverType === 'Trust' || receiverType === 'NGO') {
                 userData.organizationName = organizationName;
                 userData.registrationLicenseNumber = registrationLicenseNumber;
-            } else {
+            } else if (receiverType === 'Individual') {
                 userData.fullName = fullName;
             }
         }
 
-        // ===== إنشاء المستخدم =====
-        const newUser = await User.create(userData);
+        const newUser = new User(userData);
+        await newUser.save();
 
         res.status(201).json({
             success: true,
-            message: 'Account created successfully',
-            data: {
-                id: newUser._id,
-                username: newUser.username,
-                email: newUser.email,
-                role: newUser.role
-            }
+            message: 'Account Created Successfully!',
+            user: newUser
         });
 
     } catch (error) {
@@ -185,5 +142,4 @@ router.post('/register', upload.array('photos', 5), async (req, res) => {
         });
     }
 });
-
 module.exports = router;
