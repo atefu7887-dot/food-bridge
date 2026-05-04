@@ -38,18 +38,8 @@ const userSchema = new mongoose.Schema({
         type: String,
         enum: ['Trust', 'NGO', 'Individual'],
     },
-    organizationName: {
-        type: String,
-    },
-    registrationLicenseNumber: {
-        type: String,
-    },
 
-    // الحقول العامة والمشتركة
     fullName: {
-        type: String,
-    },
-    commercialRegisterNumber: {
         type: String,
     },
     businessPhone: {
