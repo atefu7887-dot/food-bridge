@@ -142,5 +142,4 @@ router.post('/register', upload.array('photos', 5), async (req, res) => {
         });
     }
 });
-
 module.exports = router;

@@ -45,6 +45,7 @@ const userSchema = new mongoose.Schema({
         type: String,
     },
 
+    // الحقول العامة والمشتركة
     fullName: {
         type: String,
     },
