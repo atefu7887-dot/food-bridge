@@ -6,11 +6,17 @@ const router = express.Router();
 // --- جلب المستلمين ---
 router.get('/receivers', async (req, res) => {
     try {
-        const { receiverType } = req.query;
+        const { receiverType, hasPhotos } = req.query;
 
         let query = { role: 'Receiver' };
+        
         if (receiverType) {
             query.receiverType = receiverType;
+        }
+
+        // خيار الفلترة: جلب المستلمين الذين لديهم صور فقط
+        if (hasPhotos === 'true') {
+            query.photos = { $exists: true, $ne: [] }; // يتأكد من أن الحقل موجود وليس فارغاً
         }
 
         const receivers = await User.find(query).select('-password');
