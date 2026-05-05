@@ -36,7 +36,6 @@ const userSchema = new mongoose.Schema({
         type: String,
         enum: ['Trust', 'NGO', 'Individual'],
     },
-
     address: {
         type: String,
     },
@@ -53,6 +52,23 @@ const userSchema = new mongoose.Schema({
     },
     resetPasswordExpire: {
         type: Date,
+    },
+    // --- البيانات الجديدة الخاصة بأوقات العمل للمتطوع ---
+    availability: {
+        timeSlot: {
+            type: String,
+            enum: ['Morning 9 to 11', 'Afternoon 1 to 3', 'Night 10 to 11', 'Others'],
+        },
+        customTime: {
+            type: String, // يُستخدم في حالة الضغط على Set time manually
+        },
+        days: {
+            type: [String], // لتخزين الأيام مثل ['S', 'M', 'T', 'W', 'T', 'F', 'S']
+        },
+        frequency: {
+            type: String,
+            enum: ['All Weekdays', 'All Weekend', 'Any Day'],
+        },
     },
 }, { timestamps: true });
 

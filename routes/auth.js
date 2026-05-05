@@ -56,7 +56,8 @@ router.post('/register', upload.array('photos', 5), async (req, res) => {
             donorType, 
             businessName, 
             address,
-            receiverType
+            receiverType,
+            availability // تم إضافة هذا الحقل
         } = req.body;
 
         // التحقق من الحقول الأساسية
@@ -115,6 +116,21 @@ router.post('/register', upload.array('photos', 5), async (req, res) => {
             if (receiverType === 'Trust' || receiverType === 'NGO') {
                 userData.businessName = businessName;
             }
+        }
+
+        // معالجة بيانات المتطوع (أوقات العمل)
+        if (role === 'Volunteer' && availability) {
+            // معالجة البيانات القادمة سواء كـ JSON أو String
+            let parsedAvailability = typeof availability === 'string' 
+                ? JSON.parse(availability) 
+                : availability;
+
+            userData.availability = {
+                timeSlot: parsedAvailability.timeSlot,
+                customTime: parsedAvailability.customTime || '',
+                days: parsedAvailability.days || [],
+                frequency: parsedAvailability.frequency
+            };
         }
 
         const newUser = new User(userData);
