@@ -10,7 +10,7 @@ const upload = multer({
     limits: { fileSize: 5 * 1024 * 1024 } 
 });
 
-// إعداد الحقول لاستقبال عدة صور بأسماء مختلفة
+// إعداد الحقول لاستقبال الصور المتعددة والمختلفة
 const uploadFields = upload.fields([
     { name: 'photos', maxCount: 5 },
     { name: 'avatar', maxCount: 1 },
@@ -48,7 +48,7 @@ router.post('/login', async (req, res) => {
     }
 });
 
-// --- إنشاء حساب (Register) ---
+
 router.post('/register', uploadFields, async (req, res) => {
     console.log('Received Body:', req.body); 
     console.log('Received Files:', req.files); 
@@ -94,14 +94,18 @@ router.post('/register', uploadFields, async (req, res) => {
             role,
         };
 
-        // معالجة الصور العامة في حالة وجودها
-        if (req.files && req.files['photos']) {
-            userData.photos = req.files['photos'].map(file => `${Date.now()}-${file.originalname}`);
+        
+        if (role === 'Donor' || role === 'Receiver') {
+            if (req.files && req.files['photos']) {
+                userData.photos = req.files['photos'].map(file => `${Date.now()}-${file.originalname}`);
+            } else {
+                userData.photos = [];
+            }
         } else {
-            userData.photos = [];
+            userData.photos = []; 
         }
 
-        // معالجة بيانات المتبرع
+       
         if (role === 'Donor') {
             userData.donorType = donorType || 'Individual';
             userData.address = address;
@@ -110,7 +114,7 @@ router.post('/register', uploadFields, async (req, res) => {
                 userData.businessName = businessName;
             }
         } 
-        // معالجة بيانات المستلم
+    
         else if (role === 'Receiver') {
             userData.receiverType = receiverType;
             userData.address = address;
@@ -119,7 +123,7 @@ router.post('/register', uploadFields, async (req, res) => {
                 userData.businessName = businessName;
             }
         } 
-        // معالجة بيانات المتطوع
+   
         else if (role === 'Volunteer' && availability) {
             let parsedAvailability = typeof availability === 'string' 
                 ? JSON.parse(availability) 
@@ -132,7 +136,6 @@ router.post('/register', uploadFields, async (req, res) => {
                 frequency: parsedAvailability.frequency
             };
         } 
-        // معالجة بيانات السائق (Driver) مع صورة الشخصية والبطاقة
         else if (role === 'Driver') {
             if (req.files) {
                 if (req.files['avatar']) {
