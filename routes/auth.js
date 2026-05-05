@@ -43,8 +43,8 @@ router.post('/login', async (req, res) => {
 
 // --- إنشاء حساب (Register) ---
 router.post('/register', upload.array('photos', 5), async (req, res) => {
-    console.log('Received Body:', req.body); 
-    console.log('Received Files:', req.files); 
+    console.log('Received Body:', req.body); // طباعة الحقول للتأكد من وصولها
+    console.log('Received Files:', req.files); // طباعة الملفات
 
     try {
         const { 
@@ -57,10 +57,10 @@ router.post('/register', upload.array('photos', 5), async (req, res) => {
             businessName, 
             address,
             receiverType,
-            availability 
+            availability // تم إضافة هذا الحقل
         } = req.body;
 
-      
+        // التحقق من الحقول الأساسية
         if (!username || !email || !phone || !password || !role) {
             return res.status(400).json({
                 success: false,
@@ -102,6 +102,7 @@ router.post('/register', upload.array('photos', 5), async (req, res) => {
                 userData.businessName = businessName;
             }
         } 
+        // معالجة بيانات المستلم
         else if (role === 'Receiver') {
             userData.receiverType = receiverType;
             userData.address = address;
@@ -117,9 +118,9 @@ router.post('/register', upload.array('photos', 5), async (req, res) => {
             }
         }
 
-      
+        // معالجة بيانات المتطوع (أوقات العمل)
         if (role === 'Volunteer' && availability) {
-          
+            // معالجة البيانات القادمة سواء كـ JSON أو String
             let parsedAvailability = typeof availability === 'string' 
                 ? JSON.parse(availability) 
                 : availability;
