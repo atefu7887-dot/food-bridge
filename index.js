@@ -14,10 +14,10 @@ app.use(cors());
 
 const authRouter = require('./routes/auth');
 const donationsRouter = require('./routes/donations');
-const forgotPasswordRouter = require('./routes/forgot_passwords');
+const forgotPasswordRouter = require('./routes/forgot_password');
 const messagesRouter = require('./routes/messages');
 const notificationsRouter = require('./routes/notifications');
-const receiversRouter = require('./routes/receivers');
+const receiversRouter = require('./routes/receiver');
 const volunteerRouter = require('./routes/volunteer');
 const donorRouter = require('./routes/donations'); 
 

@@ -54,11 +54,10 @@ const userSchema = new mongoose.Schema({
         type: Date,
     },
     
+    // تم إزالة required: true لتجنب الأخطاء عند تسجيل أنواع مستخدمين لا يحتاجون لتحديد أوقاتهم
     availability: {
         timeSlot: {
             type: String,
-            required: true,
-          
         },
         customTime: {
             type: String,
@@ -72,7 +71,7 @@ const userSchema = new mongoose.Schema({
             enum: ['All Weekdays', 'All Weekend', 'Any Day'],
         },
     },
-    // --- الحقول الجديدة الخاصة بالسائق ---
+   
     avatar: {
         type: String, 
         default: '',

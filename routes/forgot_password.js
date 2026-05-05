@@ -108,7 +108,6 @@ router.post('/resend-code', async (req, res) => {
             return res.status(404).json({ success: false, message: 'User not found' });
         }
 
-
         const otp = Math.floor(1000 + Math.random() * 9000).toString();
         user.resetPasswordOtp = otp;
         user.resetPasswordExpire = Date.now() + 10 * 60 * 1000;
