@@ -19,6 +19,7 @@ const uploadFields = upload.fields([
 ]);
 
 router.post('/login', async (req, res) => {
+    await connectDB(); // استدعاء الاتصال أولاً
     const { email, password } = req.body;
 
     try {
