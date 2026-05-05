@@ -1,10 +1,13 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
 const multer = require('multer');
+const axios = require('axios');
+const FormData = require('form-data');
 const User = require('../models/User');
 
 const router = express.Router();
 
+// إعداد Multer لتخزين الملفات في الذاكرة المؤقتة (Memory Storage)
 const upload = multer({ 
     storage: multer.memoryStorage(),
     limits: { fileSize: 5 * 1024 * 1024 } 
@@ -16,6 +19,29 @@ const uploadFields = upload.fields([
     { name: 'licenseImage', maxCount: 1 }
 ]);
 
+// دالة مساعدة لرفع الصورة إلى ImgBB
+async function uploadToImgBB(buffer) {
+    // ضع مفتاح API الخاص بك هنا بين علامتي التنصيص
+    const apiKey = "e588c3e5bae57852fb441c6f15619cad"; 
+    const base64Image = buffer.toString('base64');
+
+    const formData = new FormData();
+    formData.append('image', base64Image);
+
+    try {
+        const response = await axios.post(`https://api.imgbb.com/1/upload?key=${apiKey}`, formData, {
+            headers: {
+                ...formData.getHeaders()
+            }
+        });
+        return response.data.data.url; // إرجاع الرابط الدائم للصورة
+    } catch (error) {
+        console.error("ImgBB Upload Error:", error.response?.data || error.message);
+        throw new Error('Failed to upload image to external storage');
+    }
+}
+
+// مسار تسجيل الدخول
 router.post('/login', async (req, res) => {
     const { email, password } = req.body;
 
@@ -45,6 +71,7 @@ router.post('/login', async (req, res) => {
     }
 });
 
+// مسار التسجيل
 router.post('/register', uploadFields, async (req, res) => {
     try {
         const { 
@@ -71,8 +98,14 @@ router.post('/register', uploadFields, async (req, res) => {
         let userData = { username, email, phone, password: hashedPassword, role };
 
         userData.photos = [];
+        // معالجة الصور المتعددة (Photos)
         if ((role === 'Donor' || role === 'Receiver') && req.files && req.files['photos']) {
-            userData.photos = req.files['photos'].map(file => `${Date.now()}-${file.originalname}`);
+            const photoUrls = [];
+            for (const file of req.files['photos']) {
+                const url = await uploadToImgBB(file.buffer);
+                photoUrls.push(url);
+            }
+            userData.photos = photoUrls;
         }
 
         if (role === 'Donor') {
@@ -101,8 +134,12 @@ router.post('/register', uploadFields, async (req, res) => {
             }
         } else if (role === 'Driver') {
             if (req.files) {
-                if (req.files['avatar']) userData.avatar = `${Date.now()}-${req.files['avatar'][0].originalname}`;
-                if (req.files['licenseImage']) userData.licenseImage = `${Date.now()}-${req.files['licenseImage'][0].originalname}`;
+                if (req.files['avatar']) {
+                    userData.avatar = await uploadToImgBB(req.files['avatar'][0].buffer);
+                }
+                if (req.files['licenseImage']) {
+                    userData.licenseImage = await uploadToImgBB(req.files['licenseImage'][0].buffer);
+                }
             }
             if (availability) {
                 try {
