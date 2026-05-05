@@ -22,7 +22,7 @@ const volunteerRouter = require('./routes/volunteer');
 const donorRouter = require('./routes/donations'); 
 
 
-app.use('/api/auth', authRouter);
+app.use('/auth', authRouter);
 app.use('/api/donations', donationsRouter);
 app.use('/auth/forgot-password', forgotPasswordRouter);
 app.use('/api/messages', messagesRouter);
