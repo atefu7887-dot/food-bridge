@@ -14,10 +14,7 @@ dotenv.config();
 
 const connectDB = async () => {
     try {
-        await mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/food-bridge', {
-            useNewUrlParser: true,
-            useUnifiedTopology: true
-        });
+        await mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/food-bridge');
         console.log('🔗 Connected to MongoDB for Seeding...');
     } catch (error) {
         console.error('🔴 MongoDB connection error:', error.message);
@@ -69,7 +66,7 @@ const sampleUsers = [
             timeSlot: "Evening",
             customTime: "04:00 PM - 09:00 PM",
             days: ["Monday", "Wednesday", "Friday"],
-            frequency: "Regular"
+            frequency: "Any Day"
         }
     },
     {
@@ -84,7 +81,7 @@ const sampleUsers = [
             timeSlot: "Morning",
             customTime: "08:00 AM - 02:00 PM",
             days: ["Sunday", "Tuesday", "Thursday"],
-            frequency: "Flexible"
+            frequency: "All Weekdays"
         }
     }
 ];
@@ -102,7 +99,7 @@ const importData = async () => {
         await Delivery.deleteMany();
 
         // 2. تشفير كلمات المرور
-        const salt = await bcrypt.genSalt(10);
+        const salt = await bcrypt.genSalt ? await bcrypt.genSalt(10) : await bcrypt.genSalt(10);
         const hashedUsers = await Promise.all(
             sampleUsers.map(async (user) => {
                 const hashedPassword = await bcrypt.hash(user.password, salt);
@@ -134,7 +131,8 @@ const importData = async () => {
                 donor: donor2,
                 title: "مخبوزات وخبز طازج",
                 description: "فائض إنتاج اليوم من الخبز والحلويات",
-                typeOfFood: "Bakery & Sweets",
+                // تم تغيير القيمة إلى قيمة مسموحة (مطابقة للقيم الموجودة في الـ Schema لديك)
+                typeOfFood: "Cooked Food-Veg & NonVeg", 
                 foodQuantity: { veg: 50, nonVeg: 0 },
                 expirationDate: new Date("2026-05-07"),
                 expirationTime: "22:00",
@@ -221,7 +219,7 @@ const importData = async () => {
             }
         ]);
 
-        console.log(' Data Imported Successfully! ✅');
+        console.log('Data Imported Successfully! ✅');
         process.exit();
     } catch (error) {
         console.error('🔴 Error with seeding data:', error.message);
