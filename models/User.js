@@ -71,7 +71,7 @@ const userSchema = new mongoose.Schema({
             enum: ['All Weekdays', 'All Weekend', 'Any Day'],
         },
     },
-   
+    
     avatar: {
         type: String, 
         default: '',

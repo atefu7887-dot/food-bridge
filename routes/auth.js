@@ -1,9 +1,9 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
 const multer = require('multer');
-const fs = require('fs');
 const path = require('path');
-const User = require('../models/User');
+const fs = require('fs');
+const User = require('../models/User'); // استدعاء النموذج من المسار الصحيح
 
 const router = express.Router();
 
@@ -18,8 +18,11 @@ const uploadFields = upload.fields([
     { name: 'licenseImage', maxCount: 1 }
 ]);
 
+// تسجيل الدخول
 router.post('/login', async (req, res) => {
-    await connectDB(); // استدعاء الاتصال أولاً
+    // تأكد من استدعاء الاتصال بقاعدة البيانات في ملف index.js الرئيسي أو هنا
+    // await connectDB(); 
+    
     const { email, password } = req.body;
 
     try {
@@ -48,6 +51,7 @@ router.post('/login', async (req, res) => {
     }
 });
 
+// التسجيل
 router.post('/register', uploadFields, async (req, res) => {
     console.log('Received Body:', req.body); 
     console.log('Received Files:', req.files); 
@@ -96,13 +100,7 @@ router.post('/register', uploadFields, async (req, res) => {
         userData.photos = [];
         if ((role === 'Donor' || role === 'Receiver') && req.files && req.files['photos']) {
             userData.photos = req.files['photos'].map(file => {
-                // توليد الاسم
                 const fileName = `${Date.now()}-${file.originalname}`;
-                
-                // لحفظ الملف فعلياً على القرص في مجلد uploads (اختياري)
-                // تأكد من تهيئة مجلد uploads في المشروع
-                // fs.writeFileSync(path.join(__dirname, `../uploads/${fileName}`), file.buffer);
-                
                 return fileName;
             });
         }
