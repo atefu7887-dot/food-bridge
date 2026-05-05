@@ -10,28 +10,25 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 
-// --- استدعاء المسارات (Routes) ---
 const authRoutes = require('./routes/auth');
 const forgetRouter = require('./routes/forgot_password');
-const receiversRouter = require('./routes/receivers');
-const donorRouter = require('./routes/donor');
+const receiverRoutes = require('./routes/receiver');
+const donorRoutes = require('./routes/donor');
+const volunteerRoutes = require('./routes/volunteer');
+const notificationRoutes = require('./routes/notifications');
+const messageRoutes = require('./routes/messages');
 
-// تم إضافة مسار الطلبات الجديد هنا
-const requestRouter = require('./routes/requestRoutes'); 
 
-// --- الاتصال بقاعدة البيانات ---
 mongoose.connect(process.env.MONGO_URI);
 
-// --- تفعيل المسارات (Middleware) ---
 app.use('/auth', authRoutes);
 app.use('/auth', forgetRouter);
-app.use('/api', receiversRouter);
-app.use('/api', donorRouter);
+app.use('/api/receiver', receiverRoutes);
+app.use('/api/donor', donorRoutes);
+app.use('/api/volunteer', volunteerRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/messages', messageRoutes);
 
-// تم تفعيل مسار الطلبات الجديد هنا
-app.use('/api', requestRouter); 
-
-// --- أحداث قاعدة البيانات ---
 mongoose.connection.on('connected', () => {
     console.log('🟢 Connected to MongoDB');
 });

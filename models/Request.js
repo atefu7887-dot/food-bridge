@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
-const donationSchema = new mongoose.Schema({
-    donor: {
+const requestSchema = new mongoose.Schema({
+    receiver: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
         required: true
@@ -19,23 +19,31 @@ const donationSchema = new mongoose.Schema({
         enum: ['Cooked Food-Veg & NonVeg', 'Packed Food', 'Raw Ingredients']
     },
     foodQuantity: {
-        veg: { type: Number, default: 0 },
-        nonVeg: { type: Number, default: 0 }
+        type: String, 
+        required: true
     },
-   
-    expirationDate: {
+
+    date: {
         type: Date,
         required: true
     },
-    expirationTime: {
+    time: {
         type: String,
         required: true
     },
-   
+
+    contactDetails: {
+        phone: { type: String, required: true },
+        address: { type: String, required: true }
+    },
     status: {
         type: String,
         enum: ['Pending', 'Approved', 'Assigned', 'Picked Up', 'Completed'],
         default: 'Pending'
+    },
+    donor: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
     },
     assignedDriver: {
         type: mongoose.Schema.Types.ObjectId,
@@ -43,4 +51,4 @@ const donationSchema = new mongoose.Schema({
     }
 }, { timestamps: true });
 
-module.exports = mongoose.model('Donation', donationSchema);
+module.exports = mongoose.model('Request', requestSchema);

@@ -53,12 +53,12 @@ const userSchema = new mongoose.Schema({
     resetPasswordExpire: {
         type: Date,
     },
-    // البيانات الخاصة بأوقات العمل للمتطوع أو السائق
+    
     availability: {
         timeSlot: {
             type: String,
             required: true,
-            // تم إزالة الـ enum هنا ليقبل أي قيمة مخصصة يتم إرسالها من التطبيق
+          
         },
         customTime: {
             type: String,

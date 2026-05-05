@@ -10,14 +10,14 @@ const upload = multer({
     limits: { fileSize: 5 * 1024 * 1024 } 
 });
 
-// إعداد الحقول لاستقبال الصور المتعددة والمختلفة
+
 const uploadFields = upload.fields([
     { name: 'photos', maxCount: 5 },
     { name: 'avatar', maxCount: 1 },
     { name: 'licenseImage', maxCount: 1 }
 ]);
 
-// --- تسجيل الدخول ---
+
 router.post('/login', async (req, res) => {
     const { email, password } = req.body;
 
@@ -67,7 +67,6 @@ router.post('/register', uploadFields, async (req, res) => {
             availability 
         } = req.body;
 
-        // التحقق من الحقول الأساسية
         if (!username || !email || !phone || !password || !role) {
             return res.status(400).json({
                 success: false,
@@ -94,7 +93,6 @@ router.post('/register', uploadFields, async (req, res) => {
             role,
         };
 
-        // معالجة الصور
         if (role === 'Donor' || role === 'Receiver') {
             if (req.files && req.files['photos']) {
                 userData.photos = req.files['photos'].map(file => `${Date.now()}-${file.originalname}`);
@@ -105,7 +103,7 @@ router.post('/register', uploadFields, async (req, res) => {
             userData.photos = []; 
         }
 
-        // معالجة البيانات حسب الدور
+     
         if (role === 'Donor') {
             userData.donorType = donorType || 'Individual';
             userData.address = address;
