@@ -10,6 +10,13 @@ const upload = multer({
     limits: { fileSize: 5 * 1024 * 1024 } 
 });
 
+
+const uploadFields = upload.fields([
+    { name: 'photos', maxCount: 5 },
+    { name: 'avatar', maxCount: 1 },
+    { name: 'licenseImage', maxCount: 1 }
+]);
+
 // --- تسجيل الدخول ---
 router.post('/login', async (req, res) => {
     const { email, password } = req.body;
@@ -42,9 +49,9 @@ router.post('/login', async (req, res) => {
 });
 
 // --- إنشاء حساب (Register) ---
-router.post('/register', upload.array('photos', 5), async (req, res) => {
-    console.log('Received Body:', req.body); // طباعة الحقول للتأكد من وصولها
-    console.log('Received Files:', req.files); // طباعة الملفات
+router.post('/register', uploadFields, async (req, res) => {
+    console.log('Received Body:', req.body); 
+    console.log('Received Files:', req.files); 
 
     try {
         const { 
@@ -57,10 +64,10 @@ router.post('/register', upload.array('photos', 5), async (req, res) => {
             businessName, 
             address,
             receiverType,
-            availability // تم إضافة هذا الحقل
+            availability 
         } = req.body;
 
-        // التحقق من الحقول الأساسية
+  
         if (!username || !email || !phone || !password || !role) {
             return res.status(400).json({
                 success: false,
@@ -87,40 +94,33 @@ router.post('/register', upload.array('photos', 5), async (req, res) => {
             role,
         };
 
-        // معالجة بيانات المتبرع
+      
+        if (req.files && req.files['photos']) {
+            userData.photos = req.files['photos'].map(file => `${Date.now()}-${file.originalname}`);
+        } else {
+            userData.photos = [];
+        }
+
+   
         if (role === 'Donor') {
             userData.donorType = donorType || 'Individual';
             userData.address = address;
-
-            if (req.files && req.files.length > 0) {
-                userData.photos = req.files.map(file => `${Date.now()}-${file.originalname}`);
-            } else {
-                userData.photos = [];
-            }
 
             if (donorType === 'Restaurant' || donorType === 'Bakery') {
                 userData.businessName = businessName;
             }
         } 
-        // معالجة بيانات المستلم
+   
         else if (role === 'Receiver') {
             userData.receiverType = receiverType;
             userData.address = address;
 
-            if (req.files && req.files.length > 0) {
-                userData.photos = req.files.map(file => `${Date.now()}-${file.originalname}`);
-            } else {
-                userData.photos = [];
-            }
-
             if (receiverType === 'Trust' || receiverType === 'NGO') {
                 userData.businessName = businessName;
             }
-        }
-
-        // معالجة بيانات المتطوع (أوقات العمل)
-        if (role === 'Volunteer' && availability) {
-            // معالجة البيانات القادمة سواء كـ JSON أو String
+        } 
+    
+        else if (role === 'Volunteer' && availability) {
             let parsedAvailability = typeof availability === 'string' 
                 ? JSON.parse(availability) 
                 : availability;
@@ -131,6 +131,30 @@ router.post('/register', upload.array('photos', 5), async (req, res) => {
                 days: parsedAvailability.days || [],
                 frequency: parsedAvailability.frequency
             };
+        } 
+       
+        else if (role === 'Driver') {
+            if (req.files) {
+                if (req.files['avatar']) {
+                    userData.avatar = `${Date.now()}-${req.files['avatar'][0].originalname}`;
+                }
+                if (req.files['licenseImage']) {
+                    userData.licenseImage = `${Date.now()}-${req.files['licenseImage'][0].originalname}`;
+                }
+            }
+            
+            if (availability) {
+                let parsedAvailability = typeof availability === 'string' 
+                    ? JSON.parse(availability) 
+                    : availability;
+
+                userData.availability = {
+                    timeSlot: parsedAvailability.timeSlot,
+                    customTime: parsedAvailability.customTime || '',
+                    days: parsedAvailability.days || [],
+                    frequency: parsedAvailability.frequency
+                };
+            }
         }
 
         const newUser = new User(userData);
