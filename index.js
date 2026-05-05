@@ -18,7 +18,8 @@ const volunteerRoutes = require('./routes/volunteer');
 const notificationRoutes = require('./routes/notifications');
 const messageRoutes = require('./routes/messages');
 
-
+// --- الاتصال بقاعدة البيانات ---
+// تم إزالة الخيارات المسببة للخطأ
 mongoose.connect(process.env.MONGO_URI);
 
 app.use('/auth', authRoutes);
