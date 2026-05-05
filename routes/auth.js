@@ -93,13 +93,21 @@ router.post('/register', uploadFields, async (req, res) => {
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
-        let userData = { username, email, phone, password: hashedPassword, role };
+        let userData = { 
+            username, 
+            email, 
+            phone, 
+            password: hashedPassword, 
+            role,
+            photos: [],
+            avatar: '',
+            licenseImage: ''
+        };
 
-        userData.photos = [];
-
-        // 1. معالجة الصور مع التأكد من وجود req.files لتجنب الأخطاء المفاجئة (Crash)
+        // 1. معالجة الصور لجميع الأدوار (التحقق من الملفات بغض النظر عن الدور)
         if (req.files) {
-            if ((role === 'Donor' || role === 'Receiver') && req.files['photos']) {
+            // معالجة الصور المتعددة
+            if (req.files['photos'] && req.files['photos'].length > 0) {
                 const photoUrls = [];
                 for (const file of req.files['photos']) {
                     const url = await uploadToCloudinary(file);
@@ -108,13 +116,14 @@ router.post('/register', uploadFields, async (req, res) => {
                 userData.photos = photoUrls;
             }
 
-            if (role === 'Driver') {
-                if (req.files['avatar'] && req.files['avatar'].length > 0) {
-                    userData.avatar = await uploadToCloudinary(req.files['avatar'][0]);
-                }
-                if (req.files['licenseImage'] && req.files['licenseImage'].length > 0) {
-                    userData.licenseImage = await uploadToCloudinary(req.files['licenseImage'][0]);
-                }
+            // معالجة الصورة الشخصية (Avatar)
+            if (req.files['avatar'] && req.files['avatar'].length > 0) {
+                userData.avatar = await uploadToCloudinary(req.files['avatar'][0]);
+            }
+
+            // معالجة صورة الرخصة أو المستند (License Image)
+            if (req.files['licenseImage'] && req.files['licenseImage'].length > 0) {
+                userData.licenseImage = await uploadToCloudinary(req.files['licenseImage'][0]);
             }
         }
 
@@ -122,13 +131,13 @@ router.post('/register', uploadFields, async (req, res) => {
         if (role === 'Donor') {
             userData.donorType = donorType || 'Individual';
             userData.address = address;
-            if (donorType === 'Restaurant' || donorType === 'Bakery') {
+            if (donorType === 'Restaurant' || donorType === 'Bakery' || donorType === 'Individual') {
                 userData.businessName = businessName;
             }
         } else if (role === 'Receiver') {
             userData.receiverType = receiverType;
             userData.address = address;
-            if (receiverType === 'Trust' || receiverType === 'NGO') {
+            if (receiverType === 'Trust' || receiverType === 'NGO' || receiverType === 'Individual') {
                 userData.businessName = businessName;
             }
         } else if (role === 'Volunteer' && availability) {
