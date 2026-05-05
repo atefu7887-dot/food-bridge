@@ -6,149 +6,174 @@ const User = require('../models/User');
 const router = express.Router();
 
 const upload = multer({ 
-    storage: multer.memoryStorage(),
-    limits: { fileSize: 5 * 1024 * 1024 } 
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 5 * 1024 * 1024 } 
 });
+
+// إعداد الحقول لاستقبال عدة صور بأسماء مختلفة
+const uploadFields = upload.fields([
+    { name: 'photos', maxCount: 5 },
+    { name: 'avatar', maxCount: 1 },
+    { name: 'licenseImage', maxCount: 1 }
+]);
 
 // --- تسجيل الدخول ---
 router.post('/login', async (req, res) => {
-    const { email, password } = req.body;
+    const { email, password } = req.body;
 
-    try {
-        const user = await User.findOne({ email });
+    try {
+        const user = await User.findOne({ email });
 
-        if (!user) {
-            return res.status(400).json({ message: "Email not registered" });
-        }
+        if (!user) {
+            return res.status(400).json({ message: "Email not registered" });
+        }
 
-        const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) {
-            return res.status(400).json({ message: "Incorrect password" });
-        }
+        const isMatch = await bcrypt.compare(password, user.password);
+        if (!isMatch) {
+            return res.status(400).json({ message: "Incorrect password" });
+        }
 
-        res.status(200).json({
-            message: "Login successful! ✅",
-            user: { 
-                username: user.username, 
-                email: user.email, 
-                role: user.role 
-            }
-        });
+        res.status(200).json({
+            message: "Login successful! ✅",
+            user: { 
+                username: user.username, 
+                email: user.email, 
+                role: user.role 
+            }
+        });
 
-    } catch (err) {
-        console.error('Login Error:', err);
-        res.status(500).json({ message: "Server error" });
-    }
+    } catch (err) {
+        console.error('Login Error:', err);
+        res.status(500).json({ message: "Server error" });
+    }
 });
 
 // --- إنشاء حساب (Register) ---
-router.post('/register', upload.array('photos', 5), async (req, res) => {
-    console.log('Received Body:', req.body); 
-    console.log('Received Files:', req.files); 
+router.post('/register', uploadFields, async (req, res) => {
+    console.log('Received Body:', req.body); 
+    console.log('Received Files:', req.files); 
 
-    try {
-        const { 
-            username, 
-            email, 
-            phone, 
-            password, 
-            role, 
-            donorType, 
-            businessName, 
-            address,
-            receiverType,
-            availability 
-        } = req.body;
+    try {
+        const { 
+            username, 
+            email, 
+            phone, 
+            password, 
+            role, 
+            donorType, 
+            businessName, 
+            address,
+            receiverType,
+            availability 
+        } = req.body;
 
-      
-        if (!username || !email || !phone || !password || !role) {
-            return res.status(400).json({
-                success: false,
-                message: 'All required fields must be filled',
-                details: { username, email, phone, password, role }
-            });
-        }
+        // التحقق من الحقول الأساسية
+        if (!username || !email || !phone || !password || !role) {
+            return res.status(400).json({
+                success: false,
+                message: 'All required fields must be filled',
+                details: { username, email, phone, password, role }
+            });
+        }
 
-        const existingUser = await User.findOne({ email });
-        if (existingUser) {
-            return res.status(400).json({
-                success: false,
-                message: 'Email already exists'
-            });
-        }
+        const existingUser = await User.findOne({ email });
+        if (existingUser) {
+            return res.status(400).json({
+                success: false,
+                message: 'Email already exists'
+            });
+        }
 
-        const hashedPassword = await bcrypt.hash(password, 10);
+        const hashedPassword = await bcrypt.hash(password, 10);
 
-        let userData = {
-            username,
-            email,
-            phone,
-            password: hashedPassword,
-            role,
-        };
+        let userData = {
+            username,
+            email,
+            phone,
+            password: hashedPassword,
+            role,
+        };
 
-        // معالجة بيانات المتبرع
-        if (role === 'Donor') {
-            userData.donorType = donorType || 'Individual';
-            userData.address = address;
+        // معالجة الصور العامة في حالة وجودها
+        if (req.files && req.files['photos']) {
+            userData.photos = req.files['photos'].map(file => `${Date.now()}-${file.originalname}`);
+        } else {
+            userData.photos = [];
+        }
 
-            if (req.files && req.files.length > 0) {
-                userData.photos = req.files.map(file => `${Date.now()}-${file.originalname}`);
-            } else {
-                userData.photos = [];
-            }
+        // معالجة بيانات المتبرع
+        if (role === 'Donor') {
+            userData.donorType = donorType || 'Individual';
+            userData.address = address;
 
-            if (donorType === 'Restaurant' || donorType === 'Bakery') {
-                userData.businessName = businessName;
-            }
-        } 
-        else if (role === 'Receiver') {
-            userData.receiverType = receiverType;
-            userData.address = address;
+            if (donorType === 'Restaurant' || donorType === 'Bakery') {
+                userData.businessName = businessName;
+            }
+        } 
+        // معالجة بيانات المستلم
+        else if (role === 'Receiver') {
+            userData.receiverType = receiverType;
+            userData.address = address;
 
-            if (req.files && req.files.length > 0) {
-                userData.photos = req.files.map(file => `${Date.now()}-${file.originalname}`);
-            } else {
-                userData.photos = [];
-            }
+            if (receiverType === 'Trust' || receiverType === 'NGO') {
+                userData.businessName = businessName;
+            }
+        } 
+        // معالجة بيانات المتطوع
+        else if (role === 'Volunteer' && availability) {
+            let parsedAvailability = typeof availability === 'string' 
+                ? JSON.parse(availability) 
+                : availability;
 
-            if (receiverType === 'Trust' || receiverType === 'NGO') {
-                userData.businessName = businessName;
-            }
-        }
+            userData.availability = {
+                timeSlot: parsedAvailability.timeSlot,
+                customTime: parsedAvailability.customTime || '',
+                days: parsedAvailability.days || [],
+                frequency: parsedAvailability.frequency
+            };
+        } 
+        // معالجة بيانات السائق (Driver) مع صورة الشخصية والبطاقة
+        else if (role === 'Driver') {
+            if (req.files) {
+                if (req.files['avatar']) {
+                    userData.avatar = `${Date.now()}-${req.files['avatar'][0].originalname}`;
+                }
+                if (req.files['licenseImage']) {
+                    userData.licenseImage = `${Date.now()}-${req.files['licenseImage'][0].originalname}`;
+                }
+            }
 
-      
-        if (role === 'Volunteer' && availability) {
-          
-            let parsedAvailability = typeof availability === 'string' 
-                ? JSON.parse(availability) 
-                : availability;
+            if (availability) {
+                let parsedAvailability = typeof availability === 'string' 
+                    ? JSON.parse(availability) 
+                    : availability;
 
-            userData.availability = {
-                timeSlot: parsedAvailability.timeSlot,
-                customTime: parsedAvailability.customTime || '',
-                days: parsedAvailability.days || [],
-                frequency: parsedAvailability.frequency
-            };
-        }
+                userData.availability = {
+                    timeSlot: parsedAvailability.timeSlot,
+                    customTime: parsedAvailability.customTime || '',
+                    days: parsedAvailability.days || [],
+                    frequency: parsedAvailability.frequency
+                };
+            }
+        }
 
-        const newUser = new User(userData);
-        await newUser.save();
+        const newUser = new User(userData);
+        await newUser.save();
 
-        res.status(201).json({
-            success: true,
-            message: 'Account Created Successfully!',
-            user: newUser
-        });
+        res.status(201).json({
+            success: true,
+            message: 'Account Created Successfully!',
+            user: newUser
+        });
 
-    } catch (error) {
-        console.error('Register Error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Server error occurred',
-            error: error.message
-        });
-    }
+    } catch (error) {
+        console.error('Register Error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Server error occurred',
+            error: error.message
+        });
+    }
 });
 
 module.exports = router;

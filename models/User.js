@@ -21,7 +21,7 @@ const userSchema = new mongoose.Schema({
     },
     role: {
         type: String,
-        enum: ['Donor', 'Receiver', 'Volunteer'],
+        enum: ['Donor', 'Receiver', 'Volunteer', 'Driver'], // تم إضافة Driver هنا
         required: true,
     },
     donorType: {
@@ -53,7 +53,7 @@ const userSchema = new mongoose.Schema({
     resetPasswordExpire: {
         type: Date,
     },
-
+    // البيانات الخاصة بأوقات العمل للمتطوع أو السائق
     availability: {
         timeSlot: {
             type: String,
@@ -69,6 +69,15 @@ const userSchema = new mongoose.Schema({
             type: String,
             enum: ['All Weekdays', 'All Weekend', 'Any Day'],
         },
+    },
+    // --- الحقول الجديدة الخاصة بالسائق ---
+    avatar: {
+        type: String, 
+        default: '',
+    },
+    licenseImage: {
+        type: String, 
+        default: '',
     },
 }, { timestamps: true });
 
