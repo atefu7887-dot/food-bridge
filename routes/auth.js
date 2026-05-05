@@ -1,15 +1,7 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
 const multer = require('multer');
-const cloudinary = require('cloudinary').v2;
 const User = require('../models/User');
-
-// تهيئة Cloudinary
-cloudinary.config({
-    cloud_name: 'Ydmz5nofy5',
-    api_key: '951232286399324',
-    api_secret: 'iFnIsd3M8c2gGUZocvFmz8NK6DQ'
-});
 
 const router = express.Router();
 
@@ -24,21 +16,6 @@ const uploadFields = upload.fields([
     { name: 'licenseImage', maxCount: 1 }
 ]);
 
-// دالة مساعدة لرفع الملفات إلى Cloudinary
-async function uploadToCloudinary(file) {
-    if (!file || !file.buffer) return null;
-    try {
-        const base64Str = file.buffer.toString('base64');
-        const dataURI = `data:${file.mimetype};base64,${base64Str}`;
-        const response = await cloudinary.uploader.upload(dataURI);
-        return response.secure_url;
-    } catch (error) {
-        console.error("Cloudinary Upload Error:", error);
-        throw new Error("فشل في رفع الصورة");
-    }
-}
-
-// مسار تسجيل الدخول
 router.post('/login', async (req, res) => {
     const { email, password } = req.body;
 
@@ -59,8 +36,7 @@ router.post('/login', async (req, res) => {
             user: { 
                 username: user.username, 
                 email: user.email, 
-                role: user.role,
-                avatar: user.avatar 
+                role: user.role 
             }
         });
     } catch (err) {
@@ -69,7 +45,6 @@ router.post('/login', async (req, res) => {
     }
 });
 
-// مسار التسجيل
 router.post('/register', uploadFields, async (req, res) => {
     try {
         const { 
@@ -93,51 +68,23 @@ router.post('/register', uploadFields, async (req, res) => {
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
-        let userData = { 
-            username, 
-            email, 
-            phone, 
-            password: hashedPassword, 
-            role,
-            photos: [],
-            avatar: '',
-            licenseImage: ''
-        };
+        let userData = { username, email, phone, password: hashedPassword, role };
 
-        // 1. معالجة الصور لجميع الأدوار (التحقق من الملفات بغض النظر عن الدور)
-        if (req.files) {
-            // معالجة الصور المتعددة
-            if (req.files['photos'] && req.files['photos'].length > 0) {
-                const photoUrls = [];
-                for (const file of req.files['photos']) {
-                    const url = await uploadToCloudinary(file);
-                    if (url) photoUrls.push(url);
-                }
-                userData.photos = photoUrls;
-            }
-
-            // معالجة الصورة الشخصية (Avatar)
-            if (req.files['avatar'] && req.files['avatar'].length > 0) {
-                userData.avatar = await uploadToCloudinary(req.files['avatar'][0]);
-            }
-
-            // معالجة صورة الرخصة أو المستند (License Image)
-            if (req.files['licenseImage'] && req.files['licenseImage'].length > 0) {
-                userData.licenseImage = await uploadToCloudinary(req.files['licenseImage'][0]);
-            }
+        userData.photos = [];
+        if ((role === 'Donor' || role === 'Receiver') && req.files && req.files['photos']) {
+            userData.photos = req.files['photos'].map(file => `${Date.now()}-${file.originalname}`);
         }
 
-        // 2. معالجة الأدوار المختلفة
         if (role === 'Donor') {
             userData.donorType = donorType || 'Individual';
             userData.address = address;
-            if (donorType === 'Restaurant' || donorType === 'Bakery' || donorType === 'Individual') {
+            if (donorType === 'Restaurant' || donorType === 'Bakery') {
                 userData.businessName = businessName;
             }
         } else if (role === 'Receiver') {
             userData.receiverType = receiverType;
             userData.address = address;
-            if (receiverType === 'Trust' || receiverType === 'NGO' || receiverType === 'Individual') {
+            if (receiverType === 'Trust' || receiverType === 'NGO') {
                 userData.businessName = businessName;
             }
         } else if (role === 'Volunteer' && availability) {
@@ -150,9 +97,13 @@ router.post('/register', uploadFields, async (req, res) => {
                     frequency: parsedAvailability.frequency || ''
                 };
             } catch (e) {
-                console.error("Invalid JSON format for availability");
+                console.error("Invalid JSON format");
             }
         } else if (role === 'Driver') {
+            if (req.files) {
+                if (req.files['avatar']) userData.avatar = `${Date.now()}-${req.files['avatar'][0].originalname}`;
+                if (req.files['licenseImage']) userData.licenseImage = `${Date.now()}-${req.files['licenseImage'][0].originalname}`;
+            }
             if (availability) {
                 try {
                     const parsedAvailability = typeof availability === 'string' ? JSON.parse(availability) : availability;
@@ -163,7 +114,7 @@ router.post('/register', uploadFields, async (req, res) => {
                         frequency: parsedAvailability.frequency || ''
                     };
                 } catch (e) {
-                    console.error("Invalid JSON format for availability");
+                    console.error("Invalid JSON format");
                 }
             }
         }
