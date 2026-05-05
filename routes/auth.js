@@ -1,6 +1,8 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
 const multer = require('multer');
+const fs = require('fs');
+const path = require('path');
 const User = require('../models/User');
 
 const router = express.Router();
@@ -10,13 +12,11 @@ const upload = multer({
     limits: { fileSize: 5 * 1024 * 1024 } 
 });
 
-
 const uploadFields = upload.fields([
     { name: 'photos', maxCount: 5 },
     { name: 'avatar', maxCount: 1 },
     { name: 'licenseImage', maxCount: 1 }
 ]);
-
 
 router.post('/login', async (req, res) => {
     const { email, password } = req.body;
@@ -41,13 +41,11 @@ router.post('/login', async (req, res) => {
                 role: user.role 
             }
         });
-
     } catch (err) {
         console.error('Login Error:', err);
         res.status(500).json({ message: "Server error" });
     }
 });
-
 
 router.post('/register', uploadFields, async (req, res) => {
     console.log('Received Body:', req.body); 
@@ -93,17 +91,21 @@ router.post('/register', uploadFields, async (req, res) => {
             role,
         };
 
-        if (role === 'Donor' || role === 'Receiver') {
-            if (req.files && req.files['photos']) {
-                userData.photos = req.files['photos'].map(file => `${Date.now()}-${file.originalname}`);
-            } else {
-                userData.photos = [];
-            }
-        } else {
-            userData.photos = []; 
+        // معالجة الصور للمتبرع والمتلقي
+        userData.photos = [];
+        if ((role === 'Donor' || role === 'Receiver') && req.files && req.files['photos']) {
+            userData.photos = req.files['photos'].map(file => {
+                // توليد الاسم
+                const fileName = `${Date.now()}-${file.originalname}`;
+                
+                // لحفظ الملف فعلياً على القرص في مجلد uploads (اختياري)
+                // تأكد من تهيئة مجلد uploads في المشروع
+                // fs.writeFileSync(path.join(__dirname, `../uploads/${fileName}`), file.buffer);
+                
+                return fileName;
+            });
         }
 
-     
         if (role === 'Donor') {
             userData.donorType = donorType || 'Individual';
             userData.address = address;
@@ -121,16 +123,21 @@ router.post('/register', uploadFields, async (req, res) => {
             }
         } 
         else if (role === 'Volunteer' && availability) {
-            let parsedAvailability = typeof availability === 'string' 
-                ? JSON.parse(availability) 
-                : availability;
+            let parsedAvailability = null;
+            try {
+                parsedAvailability = typeof availability === 'string' ? JSON.parse(availability) : availability;
+            } catch (e) {
+                console.error("Invalid availability JSON format:", e);
+            }
 
-            userData.availability = {
-                timeSlot: parsedAvailability.timeSlot,
-                customTime: parsedAvailability.customTime || '',
-                days: parsedAvailability.days || [],
-                frequency: parsedAvailability.frequency
-            };
+            if (parsedAvailability) {
+                userData.availability = {
+                    timeSlot: parsedAvailability.timeSlot || '',
+                    customTime: parsedAvailability.customTime || '',
+                    days: parsedAvailability.days || [],
+                    frequency: parsedAvailability.frequency || ''
+                };
+            }
         } 
         else if (role === 'Driver') {
             if (req.files) {
@@ -143,16 +150,21 @@ router.post('/register', uploadFields, async (req, res) => {
             }
 
             if (availability) {
-                let parsedAvailability = typeof availability === 'string' 
-                    ? JSON.parse(availability) 
-                    : availability;
+                let parsedAvailability = null;
+                try {
+                    parsedAvailability = typeof availability === 'string' ? JSON.parse(availability) : availability;
+                } catch (e) {
+                    console.error("Invalid availability JSON format:", e);
+                }
 
-                userData.availability = {
-                    timeSlot: parsedAvailability.timeSlot,
-                    customTime: parsedAvailability.customTime || '',
-                    days: parsedAvailability.days || [],
-                    frequency: parsedAvailability.frequency
-                };
+                if (parsedAvailability) {
+                    userData.availability = {
+                        timeSlot: parsedAvailability.timeSlot || '',
+                        customTime: parsedAvailability.customTime || '',
+                        days: parsedAvailability.days || [],
+                        frequency: parsedAvailability.frequency || ''
+                    };
+                }
             }
         }
 
