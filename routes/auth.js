@@ -4,7 +4,7 @@ const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
 const User = require('../models/User');
 
-// تهيئة Cloudinary (استبدل القيم بالخاصة بك)
+// تهيئة Cloudinary
 cloudinary.config({
     cloud_name: 'Ydmz5nofy5',
     api_key: '951232286399324',
@@ -26,9 +26,9 @@ const uploadFields = upload.fields([
 
 // دالة مساعدة لرفع الملفات إلى Cloudinary
 async function uploadToCloudinary(file) {
-    if (!file) return null;
+    if (!file || !file.buffer) return null;
     try {
-        const base64Str = Buffer.from(file.buffer).toString('base64');
+        const base64Str = file.buffer.toString('base64');
         const dataURI = `data:${file.mimetype};base64,${base64Str}`;
         const response = await cloudinary.uploader.upload(dataURI);
         return response.secure_url;
@@ -38,6 +38,7 @@ async function uploadToCloudinary(file) {
     }
 }
 
+// مسار تسجيل الدخول
 router.post('/login', async (req, res) => {
     const { email, password } = req.body;
 
@@ -59,7 +60,7 @@ router.post('/login', async (req, res) => {
                 username: user.username, 
                 email: user.email, 
                 role: user.role,
-                avatar: user.avatar // تأكد من إرجاع الـ avatar في تسجيل الدخول
+                avatar: user.avatar 
             }
         });
     } catch (err) {
@@ -68,6 +69,7 @@ router.post('/login', async (req, res) => {
     }
 });
 
+// مسار التسجيل
 router.post('/register', uploadFields, async (req, res) => {
     try {
         const { 
@@ -93,15 +95,27 @@ router.post('/register', uploadFields, async (req, res) => {
         const hashedPassword = await bcrypt.hash(password, 10);
         let userData = { username, email, phone, password: hashedPassword, role };
 
-        // 1. معالجة الصور (Photos) للـ Donor أو Receiver
         userData.photos = [];
-        if ((role === 'Donor' || role === 'Receiver') && req.files && req.files['photos']) {
-            const photoUrls = [];
-            for (const file of req.files['photos']) {
-                const url = await uploadToCloudinary(file);
-                photoUrls.push(url);
+
+        // 1. معالجة الصور مع التأكد من وجود req.files لتجنب الأخطاء المفاجئة (Crash)
+        if (req.files) {
+            if ((role === 'Donor' || role === 'Receiver') && req.files['photos']) {
+                const photoUrls = [];
+                for (const file of req.files['photos']) {
+                    const url = await uploadToCloudinary(file);
+                    if (url) photoUrls.push(url);
+                }
+                userData.photos = photoUrls;
             }
-            userData.photos = photoUrls;
+
+            if (role === 'Driver') {
+                if (req.files['avatar'] && req.files['avatar'].length > 0) {
+                    userData.avatar = await uploadToCloudinary(req.files['avatar'][0]);
+                }
+                if (req.files['licenseImage'] && req.files['licenseImage'].length > 0) {
+                    userData.licenseImage = await uploadToCloudinary(req.files['licenseImage'][0]);
+                }
+            }
         }
 
         // 2. معالجة الأدوار المختلفة
@@ -127,18 +141,9 @@ router.post('/register', uploadFields, async (req, res) => {
                     frequency: parsedAvailability.frequency || ''
                 };
             } catch (e) {
-                console.error("Invalid JSON format");
+                console.error("Invalid JSON format for availability");
             }
         } else if (role === 'Driver') {
-            // رفع الـ avatar و licenseImage لـ Cloudinary
-            if (req.files) {
-                if (req.files['avatar']) {
-                    userData.avatar = await uploadToCloudinary(req.files['avatar'][0]);
-                }
-                if (req.files['licenseImage']) {
-                    userData.licenseImage = await uploadToCloudinary(req.files['licenseImage'][0]);
-                }
-            }
             if (availability) {
                 try {
                     const parsedAvailability = typeof availability === 'string' ? JSON.parse(availability) : availability;
@@ -149,7 +154,7 @@ router.post('/register', uploadFields, async (req, res) => {
                         frequency: parsedAvailability.frequency || ''
                     };
                 } catch (e) {
-                    console.error("Invalid JSON format");
+                    console.error("Invalid JSON format for availability");
                 }
             }
         }
