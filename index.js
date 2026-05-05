@@ -3,14 +3,15 @@ const mongoose = require('mongoose');
 const dotenv = require('dotenv');
 const cors = require('cors');
 
+
 dotenv.config();
 const app = express();
 
-// Middleware
+
 app.use(express.json());
 app.use(cors());
 
-// المسارات
+
 const authRouter = require('./routes/auth');
 const donationsRouter = require('./routes/donations');
 const forgotPasswordRouter = require('./routes/forgot_password');
@@ -18,7 +19,8 @@ const messagesRouter = require('./routes/messages');
 const notificationsRouter = require('./routes/notifications');
 const receiversRouter = require('./routes/receiver');
 const volunteerRouter = require('./routes/volunteer');
-const donorRouter = require('./routes/donations');
+const donorRouter = require('./routes/donations'); 
+
 
 app.use('/api/auth', authRouter);
 app.use('/api/donations', donationsRouter);
@@ -29,37 +31,13 @@ app.use('/api/receiver', receiversRouter);
 app.use('/api/volunteer', volunteerRouter);
 app.use('/api/donor', donorRouter);
 
-// الاتصال بقاعدة البيانات
-let isConnected = false;
 
-const connectDB = async () => {
-    if (isConnected) {
-        return;
-    }
-    try {
-        await mongoose.connect(process.env.MONGO_URI);
-        isConnected = true;
-        console.log('=> تم الاتصال بقاعدة البيانات بنجاح.');
-    } catch (error) {
-        console.error('خطأ في الاتصال بقاعدة البيانات:', error);
-        throw error;
-    }
-};
-
-// Middleware للاتصال قبل المعالجة
-app.use(async (req, res, next) => {
-    try {
-        await connectDB();
-        next();
-    } catch (err) {
-        res.status(500).json({ message: "Server database connection error" });
-    }
-});
+mongoose.connect(process.env.MONGO_URI)
+.then(() => console.log('MongoDB Connected successfully...'))
+.catch(err => console.error('MongoDB connection error:', err));
 
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });
-
-module.exports = app;
