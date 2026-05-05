@@ -1,7 +1,15 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
 const multer = require('multer');
+const cloudinary = require('cloudinary').v2;
 const User = require('../models/User');
+
+// تهيئة Cloudinary (استبدل القيم بالخاصة بك)
+cloudinary.config({
+    cloud_name: 'Ydmz5nofy5',
+    api_key: '951232286399324',
+    api_secret: 'iFnIsd3M8c2gGUZocvFmz8NK6DQ'
+});
 
 const router = express.Router();
 
@@ -15,6 +23,20 @@ const uploadFields = upload.fields([
     { name: 'avatar', maxCount: 1 },
     { name: 'licenseImage', maxCount: 1 }
 ]);
+
+// دالة مساعدة لرفع الملفات إلى Cloudinary
+async function uploadToCloudinary(file) {
+    if (!file) return null;
+    try {
+        const base64Str = Buffer.from(file.buffer).toString('base64');
+        const dataURI = `data:${file.mimetype};base64,${base64Str}`;
+        const response = await cloudinary.uploader.upload(dataURI);
+        return response.secure_url;
+    } catch (error) {
+        console.error("Cloudinary Upload Error:", error);
+        throw new Error("فشل في رفع الصورة");
+    }
+}
 
 router.post('/login', async (req, res) => {
     const { email, password } = req.body;
@@ -36,7 +58,8 @@ router.post('/login', async (req, res) => {
             user: { 
                 username: user.username, 
                 email: user.email, 
-                role: user.role 
+                role: user.role,
+                avatar: user.avatar // تأكد من إرجاع الـ avatar في تسجيل الدخول
             }
         });
     } catch (err) {
@@ -70,11 +93,18 @@ router.post('/register', uploadFields, async (req, res) => {
         const hashedPassword = await bcrypt.hash(password, 10);
         let userData = { username, email, phone, password: hashedPassword, role };
 
+        // 1. معالجة الصور (Photos) للـ Donor أو Receiver
         userData.photos = [];
         if ((role === 'Donor' || role === 'Receiver') && req.files && req.files['photos']) {
-            userData.photos = req.files['photos'].map(file => `${Date.now()}-${file.originalname}`);
+            const photoUrls = [];
+            for (const file of req.files['photos']) {
+                const url = await uploadToCloudinary(file);
+                photoUrls.push(url);
+            }
+            userData.photos = photoUrls;
         }
 
+        // 2. معالجة الأدوار المختلفة
         if (role === 'Donor') {
             userData.donorType = donorType || 'Individual';
             userData.address = address;
@@ -100,9 +130,14 @@ router.post('/register', uploadFields, async (req, res) => {
                 console.error("Invalid JSON format");
             }
         } else if (role === 'Driver') {
+            // رفع الـ avatar و licenseImage لـ Cloudinary
             if (req.files) {
-                if (req.files['avatar']) userData.avatar = `${Date.now()}-${req.files['avatar'][0].originalname}`;
-                if (req.files['licenseImage']) userData.licenseImage = `${Date.now()}-${req.files['licenseImage'][0].originalname}`;
+                if (req.files['avatar']) {
+                    userData.avatar = await uploadToCloudinary(req.files['avatar'][0]);
+                }
+                if (req.files['licenseImage']) {
+                    userData.licenseImage = await uploadToCloudinary(req.files['licenseImage'][0]);
+                }
             }
             if (availability) {
                 try {
