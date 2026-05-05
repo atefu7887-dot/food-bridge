@@ -1,9 +1,7 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
 const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
-const User = require('../models/User'); // استدعاء النموذج من المسار الصحيح
+const User = require('../models/User');
 
 const router = express.Router();
 
@@ -18,11 +16,7 @@ const uploadFields = upload.fields([
     { name: 'licenseImage', maxCount: 1 }
 ]);
 
-// تسجيل الدخول
 router.post('/login', async (req, res) => {
-    // تأكد من استدعاء الاتصال بقاعدة البيانات في ملف index.js الرئيسي أو هنا
-    // await connectDB(); 
-    
     const { email, password } = req.body;
 
     try {
@@ -51,30 +45,17 @@ router.post('/login', async (req, res) => {
     }
 });
 
-// التسجيل
 router.post('/register', uploadFields, async (req, res) => {
-    console.log('Received Body:', req.body); 
-    console.log('Received Files:', req.files); 
-
     try {
         const { 
-            username, 
-            email, 
-            phone, 
-            password, 
-            role, 
-            donorType, 
-            businessName, 
-            address,
-            receiverType,
-            availability 
+            username, email, phone, password, role, 
+            donorType, businessName, address, receiverType, availability 
         } = req.body;
 
         if (!username || !email || !phone || !password || !role) {
             return res.status(400).json({
                 success: false,
-                message: 'All required fields must be filled',
-                details: { username, email, phone, password, role }
+                message: 'All required fields must be filled'
             });
         }
 
@@ -87,82 +68,53 @@ router.post('/register', uploadFields, async (req, res) => {
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
+        let userData = { username, email, phone, password: hashedPassword, role };
 
-        let userData = {
-            username,
-            email,
-            phone,
-            password: hashedPassword,
-            role,
-        };
-
-        // معالجة الصور للمتبرع والمتلقي
         userData.photos = [];
         if ((role === 'Donor' || role === 'Receiver') && req.files && req.files['photos']) {
-            userData.photos = req.files['photos'].map(file => {
-                const fileName = `${Date.now()}-${file.originalname}`;
-                return fileName;
-            });
+            userData.photos = req.files['photos'].map(file => `${Date.now()}-${file.originalname}`);
         }
 
         if (role === 'Donor') {
             userData.donorType = donorType || 'Individual';
             userData.address = address;
-
             if (donorType === 'Restaurant' || donorType === 'Bakery') {
                 userData.businessName = businessName;
             }
-        } 
-        else if (role === 'Receiver') {
+        } else if (role === 'Receiver') {
             userData.receiverType = receiverType;
             userData.address = address;
-
             if (receiverType === 'Trust' || receiverType === 'NGO') {
                 userData.businessName = businessName;
             }
-        } 
-        else if (role === 'Volunteer' && availability) {
-            let parsedAvailability = null;
+        } else if (role === 'Volunteer' && availability) {
             try {
-                parsedAvailability = typeof availability === 'string' ? JSON.parse(availability) : availability;
-            } catch (e) {
-                console.error("Invalid availability JSON format:", e);
-            }
-
-            if (parsedAvailability) {
+                const parsedAvailability = typeof availability === 'string' ? JSON.parse(availability) : availability;
                 userData.availability = {
                     timeSlot: parsedAvailability.timeSlot || '',
                     customTime: parsedAvailability.customTime || '',
                     days: parsedAvailability.days || [],
                     frequency: parsedAvailability.frequency || ''
                 };
+            } catch (e) {
+                console.error("Invalid JSON format");
             }
-        } 
-        else if (role === 'Driver') {
+        } else if (role === 'Driver') {
             if (req.files) {
-                if (req.files['avatar']) {
-                    userData.avatar = `${Date.now()}-${req.files['avatar'][0].originalname}`;
-                }
-                if (req.files['licenseImage']) {
-                    userData.licenseImage = `${Date.now()}-${req.files['licenseImage'][0].originalname}`;
-                }
+                if (req.files['avatar']) userData.avatar = `${Date.now()}-${req.files['avatar'][0].originalname}`;
+                if (req.files['licenseImage']) userData.licenseImage = `${Date.now()}-${req.files['licenseImage'][0].originalname}`;
             }
-
             if (availability) {
-                let parsedAvailability = null;
                 try {
-                    parsedAvailability = typeof availability === 'string' ? JSON.parse(availability) : availability;
-                } catch (e) {
-                    console.error("Invalid availability JSON format:", e);
-                }
-
-                if (parsedAvailability) {
+                    const parsedAvailability = typeof availability === 'string' ? JSON.parse(availability) : availability;
                     userData.availability = {
                         timeSlot: parsedAvailability.timeSlot || '',
                         customTime: parsedAvailability.customTime || '',
                         days: parsedAvailability.days || [],
                         frequency: parsedAvailability.frequency || ''
                     };
+                } catch (e) {
+                    console.error("Invalid JSON format");
                 }
             }
         }

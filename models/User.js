@@ -53,8 +53,6 @@ const userSchema = new mongoose.Schema({
     resetPasswordExpire: {
         type: Date,
     },
-    
-    // تم إزالة required: true لتجنب الأخطاء عند تسجيل أنواع مستخدمين لا يحتاجون لتحديد أوقاتهم
     availability: {
         timeSlot: {
             type: String,
@@ -71,7 +69,6 @@ const userSchema = new mongoose.Schema({
             enum: ['All Weekdays', 'All Weekend', 'Any Day'],
         },
     },
-    
     avatar: {
         type: String, 
         default: '',
