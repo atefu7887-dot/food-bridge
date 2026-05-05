@@ -94,7 +94,7 @@ router.post('/register', uploadFields, async (req, res) => {
             role,
         };
 
-        
+        // معالجة الصور
         if (role === 'Donor' || role === 'Receiver') {
             if (req.files && req.files['photos']) {
                 userData.photos = req.files['photos'].map(file => `${Date.now()}-${file.originalname}`);
@@ -105,7 +105,7 @@ router.post('/register', uploadFields, async (req, res) => {
             userData.photos = []; 
         }
 
-       
+        // معالجة البيانات حسب الدور
         if (role === 'Donor') {
             userData.donorType = donorType || 'Individual';
             userData.address = address;
@@ -114,7 +114,6 @@ router.post('/register', uploadFields, async (req, res) => {
                 userData.businessName = businessName;
             }
         } 
-    
         else if (role === 'Receiver') {
             userData.receiverType = receiverType;
             userData.address = address;
@@ -123,7 +122,6 @@ router.post('/register', uploadFields, async (req, res) => {
                 userData.businessName = businessName;
             }
         } 
-   
         else if (role === 'Volunteer' && availability) {
             let parsedAvailability = typeof availability === 'string' 
                 ? JSON.parse(availability) 

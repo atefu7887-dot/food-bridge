@@ -21,7 +21,7 @@ const userSchema = new mongoose.Schema({
     },
     role: {
         type: String,
-        enum: ['Donor', 'Receiver', 'Volunteer', 'Driver'], // تم إضافة Driver هنا
+        enum: ['Donor', 'Receiver', 'Volunteer', 'Driver'],
         required: true,
     },
     donorType: {
@@ -57,10 +57,12 @@ const userSchema = new mongoose.Schema({
     availability: {
         timeSlot: {
             type: String,
-            enum: ['Morning 9 to 11', 'Afternoon 1 to 3', 'Night 10 to 11', 'Others'],
+            required: true,
+            // تم إزالة الـ enum هنا ليقبل أي قيمة مخصصة يتم إرسالها من التطبيق
         },
         customTime: {
-            type: String, 
+            type: String,
+            default: "",
         },
         days: {
             type: [String], 
