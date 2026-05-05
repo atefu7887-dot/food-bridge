@@ -21,7 +21,6 @@ const uploadFields = upload.fields([
 
 // دالة مساعدة لرفع الصورة إلى ImgBB
 async function uploadToImgBB(buffer) {
-    // ضع مفتاح API الخاص بك هنا بين علامتي التنصيص
     const apiKey = "e588c3e5bae57852fb441c6f15619cad"; 
     const base64Image = buffer.toString('base64');
 
@@ -34,7 +33,7 @@ async function uploadToImgBB(buffer) {
                 ...formData.getHeaders()
             }
         });
-        return response.data.data.url; // إرجاع الرابط الدائم للصورة
+        return response.data.data.url;
     } catch (error) {
         console.error("ImgBB Upload Error:", error.response?.data || error.message);
         throw new Error('Failed to upload image to external storage');
@@ -98,6 +97,7 @@ router.post('/register', uploadFields, async (req, res) => {
         let userData = { username, email, phone, password: hashedPassword, role };
 
         userData.photos = [];
+        
         // معالجة الصور المتعددة (Photos)
         if ((role === 'Donor' || role === 'Receiver') && req.files && req.files['photos']) {
             const photoUrls = [];
@@ -120,19 +120,8 @@ router.post('/register', uploadFields, async (req, res) => {
             if (receiverType === 'Trust' || receiverType === 'NGO') {
                 userData.businessName = businessName;
             }
-        } else if (role === 'Volunteer' && availability) {
-            try {
-                const parsedAvailability = typeof availability === 'string' ? JSON.parse(availability) : availability;
-                userData.availability = {
-                    timeSlot: parsedAvailability.timeSlot || '',
-                    customTime: parsedAvailability.customTime || '',
-                    days: parsedAvailability.days || [],
-                    frequency: parsedAvailability.frequency || ''
-                };
-            } catch (e) {
-                console.error("Invalid JSON format");
-            }
         } else if (role === 'Driver') {
+            // معالجة صور السائق
             if (req.files) {
                 if (req.files['avatar']) {
                     userData.avatar = await uploadToImgBB(req.files['avatar'][0].buffer);
@@ -141,6 +130,8 @@ router.post('/register', uploadFields, async (req, res) => {
                     userData.licenseImage = await uploadToImgBB(req.files['licenseImage'][0].buffer);
                 }
             }
+            
+            // معالجة الإتاحة (Availability)
             if (availability) {
                 try {
                     const parsedAvailability = typeof availability === 'string' ? JSON.parse(availability) : availability;
@@ -151,7 +142,7 @@ router.post('/register', uploadFields, async (req, res) => {
                         frequency: parsedAvailability.frequency || ''
                     };
                 } catch (e) {
-                    console.error("Invalid JSON format");
+                    console.error("Invalid JSON format for availability");
                 }
             }
         }
