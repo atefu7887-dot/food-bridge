@@ -1,13 +1,11 @@
 const express = require('express');
 const Notification = require('../models/Notification');
-const { protect } = require('./auth'); 
+const { protect } = require('../middleware/auth'); 
 
 const router = express.Router();
 
-
 router.get('/', protect, async (req, res) => {
     try {
-
         const notifications = await Notification.find({ 
             user: req.user.id, 
             role: req.user.role 
@@ -22,7 +20,6 @@ router.get('/', protect, async (req, res) => {
         res.status(500).json({ success: false, message: 'Server error' });
     }
 });
-
 
 router.post('/create', protect, async (req, res) => {
     try {

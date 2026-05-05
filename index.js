@@ -1,46 +1,43 @@
 const express = require('express');
 const mongoose = require('mongoose');
-const path = require('path');
-require('dotenv').config(); 
+const dotenv = require('dotenv');
+const cors = require('cors');
 
+
+dotenv.config();
 const app = express();
 
-// --- PORT ---
-const PORT = process.env.PORT || 3000; 
 
 app.use(express.json());
+app.use(cors());
 
-const authRoutes = require('./routes/auth');
-const forgetRouter = require('./routes/forgot_password');
-const receiverRoutes = require('./routes/receiver');
-const donorRoutes = require('./routes/donor');
-const volunteerRoutes = require('./routes/volunteer');
-const notificationRoutes = require('./routes/notifications');
-const messageRoutes = require('./routes/messages');
 
-// --- الاتصال بقاعدة البيانات ---
-// تم إزالة الخيارات المسببة للخطأ
-mongoose.connect(process.env.MONGO_URI);
+const authRouter = require('./routes/auth');
+const donationsRouter = require('./routes/donations');
+const forgotPasswordRouter = require('./routes/forgot_passwords');
+const messagesRouter = require('./routes/messages');
+const notificationsRouter = require('./routes/notifications');
+const receiversRouter = require('./routes/receivers');
+const volunteerRouter = require('./routes/volunteer');
+const donorRouter = require('./routes/donations'); 
 
-app.use('/auth', authRoutes);
-app.use('/auth', forgetRouter);
-app.use('/api/receiver', receiverRoutes);
-app.use('/api/donor', donorRoutes);
-app.use('/api/volunteer', volunteerRoutes);
-app.use('/api/notifications', notificationRoutes);
-app.use('/api/messages', messageRoutes);
 
-mongoose.connection.on('connected', () => {
-    console.log('🟢 Connected to MongoDB');
-});
+app.use('/api/auth', authRouter);
+app.use('/api/donations', donationsRouter);
+app.use('/api/forgot-password', forgotPasswordRouter);
+app.use('/api/messages', messagesRouter);
+app.use('/api/notifications', notificationsRouter);
+app.use('/api/receiver', receiversRouter);
+app.use('/api/volunteer', volunteerRouter);
+app.use('/api/donor', donorRouter);
 
-mongoose.connection.on('error', (err) => {
-    console.error('🔴 MongoDB connection error:', err);
-});
 
-// --- بدء الخادم ---
+mongoose.connect(process.env.MONGO_URI)
+.then(() => console.log('MongoDB Connected successfully...'))
+.catch(err => console.error('MongoDB connection error:', err));
+
+const PORT = process.env.PORT || 3000;
+
 app.listen(PORT, () => {
-    console.log(`🚀 Server is running on port ${PORT}`);
+    console.log(`Server is running on port ${PORT}`);
 });
-
-module.exports = app;

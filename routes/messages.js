@@ -1,9 +1,8 @@
 const express = require('express');
 const Message = require('../models/Message');
-const { protect } = require('./auth'); 
+const { protect } = require('../middleware/auth'); 
 
 const router = express.Router();
-
 
 router.post('/send', protect, async (req, res) => {
     try {
@@ -33,13 +32,11 @@ router.post('/send', protect, async (req, res) => {
     }
 });
 
-
 router.get('/conversation/:otherUserId', protect, async (req, res) => {
     try {
         const currentUserId = req.user.id;
         const otherUserId = req.params.otherUserId;
 
-  
         const messages = await Message.find({
             $or: [
                 { sender: currentUserId, receiver: otherUserId },
@@ -56,7 +53,6 @@ router.get('/conversation/:otherUserId', protect, async (req, res) => {
         res.status(500).json({ success: false, message: 'Server error' });
     }
 });
-
 
 router.patch('/read/:senderId', protect, async (req, res) => {
     try {

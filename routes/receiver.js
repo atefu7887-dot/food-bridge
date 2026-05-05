@@ -1,10 +1,9 @@
 const express = require('express');
 const Request = require('../models/Request');
 const Donation = require('../models/Donation');
-const { protect, restrictTo } = require('./auth');
+const { protect, restrictTo } = require('../middleware/auth'); // تم تعديل المسار هنا
 
 const router = express.Router();
-
 
 router.get('/available-donations', protect, restrictTo('Receiver'), async (req, res) => {
     try {
@@ -22,7 +21,6 @@ router.get('/available-donations', protect, restrictTo('Receiver'), async (req, 
     }
 });
 
-
 router.post('/request-donation', protect, restrictTo('Receiver'), async (req, res) => {
     try {
         const { 
@@ -35,7 +33,6 @@ router.post('/request-donation', protect, restrictTo('Receiver'), async (req, re
             contactDetails, 
             donorId 
         } = req.body;
-
 
         if (!date || !time) {
             return res.status(400).json({ 
@@ -69,7 +66,6 @@ router.post('/request-donation', protect, restrictTo('Receiver'), async (req, re
         res.status(500).json({ success: false, message: 'Server error' });
     }
 });
-
 
 router.get('/my-requests', protect, restrictTo('Receiver'), async (req, res) => {
     try {

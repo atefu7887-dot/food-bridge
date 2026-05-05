@@ -1,9 +1,8 @@
 const express = require('express');
 const Donation = require('../models/Donation');
-const { protect, restrictTo } = require('./auth'); 
+const { protect, restrictTo } = require('../middleware/auth'); 
 
 const router = express.Router();
-
 
 router.post('/create-donation', protect, restrictTo('Donor'), async (req, res) => {
     try {
@@ -16,7 +15,6 @@ router.post('/create-donation', protect, restrictTo('Donor'), async (req, res) =
             expirationTime 
         } = req.body;
 
-   
         if (!expirationDate || !expirationTime) {
             return res.status(400).json({ 
                 success: false, 
@@ -47,7 +45,6 @@ router.post('/create-donation', protect, restrictTo('Donor'), async (req, res) =
         res.status(500).json({ success: false, message: 'Server error' });
     }
 });
-
 
 router.get('/my-donations', protect, restrictTo('Donor'), async (req, res) => {
     try {

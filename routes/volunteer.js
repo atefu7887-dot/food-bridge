@@ -1,13 +1,11 @@
 const express = require('express');
 const Delivery = require('../models/Delivery');
-const { protect, restrictTo } = require('./auth'); 
+const { protect, restrictTo } = require('../middleware/auth'); 
 
 const router = express.Router();
 
-
 router.get('/requests-to-deliver', protect, restrictTo('Volunteer'), async (req, res) => {
     try {
-   
         const deliveries = await Delivery.find({
             volunteer: req.user.id,
             status: 'Assigned'
@@ -22,7 +20,6 @@ router.get('/requests-to-deliver', protect, restrictTo('Volunteer'), async (req,
         res.status(500).json({ success: false, message: 'Server error' });
     }
 });
-
 
 router.patch('/update-status/:id', protect, restrictTo('Volunteer'), async (req, res) => {
     try {
