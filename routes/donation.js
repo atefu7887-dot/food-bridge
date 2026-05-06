@@ -90,6 +90,15 @@ router.post('/add-listing', upload.array('photos', 5), async (req, res) => {
             }
         }
 
+        // التحقق من صحة التاريخ
+        const parsedDate = new Date(expirationDate);
+        if (isNaN(parsedDate.getTime())) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid expirationDate format'
+            });
+        }
+
         // إنشاء التبرع الجديد
         const newListing = await DonationListing.create({
             donorId,
@@ -98,7 +107,7 @@ router.post('/add-listing', upload.array('photos', 5), async (req, res) => {
             foodType,
             quantity: parsedQuantity,
             photos: photoUrls,
-            expirationDate: new Date(expirationDate),
+            expirationDate: parsedDate,
             expirationTime,
             isHygieneAssured: isHygieneAssured === 'true' || isHygieneAssured === true
         });
