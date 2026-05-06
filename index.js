@@ -14,11 +14,13 @@ app.use(cors());
 
 const authRouter = require('./routes/auth');
 const forgotPasswordRouter = require('./routes/forgot_password');
+const donationRouter = require('./routes/donation');
 
 
 app.use('/auth', authRouter);
 
 app.use('/auth/forgot-password', forgotPasswordRouter);
+app.use('/api/donation', donationRouter);
 
 
 mongoose.connect(process.env.MONGO_URI)
