@@ -119,4 +119,36 @@ router.post('/add-listing', upload.array('photos', 5), async (req, res) => {
     }
 });
 
+router.get('/my-listings/:donorId', async (req, res) => {
+    try {
+        const { donorId } = req.params;
+
+        // التحقق من وجود المستخدم وصلاحيته كـ Donor
+        const user = await User.findById(donorId);
+        if (!user || user.role !== 'Donor') {
+            return res.status(403).json({
+                success: false,
+                message: 'Access denied. Only Donors can view their listings.'
+            });
+        }
+
+        // جلب التبرعات الخاصة بالمتبرع وترتيبها من الأحدث إلى الأقدم
+        const listings = await DonationListing.find({ donorId }).sort({ createdAt: -1 });
+
+        res.status(200).json({
+            success: true,
+            count: listings.length,
+            listings
+        });
+
+    } catch (error) {
+        console.error("Get Donor Listings Error:", error);
+        res.status(500).json({
+            success: false,
+            message: "Server error occurred",
+            error: error.message
+        });
+    }
+});
+
 module.exports = router;
