@@ -13,7 +13,7 @@ const upload = multer({
     limits: { fileSize: 5 * 1024 * 1024 } // 5 MB كحد أقصى
 });
 
-// دالة رفع الصور إلى ImgBB (مطابقة للتي تستخدمها)
+// دالة رفع الصور إلى ImgBB
 async function uploadToImgBB(buffer) {
     const apiKey = "e588c3e5bae57852fb441c6f15619cad";
 
@@ -44,14 +44,14 @@ router.post('/add-listing', upload.array('photos', 5), async (req, res) => {
             title,
             description,
             foodType,
-            quantity, // يمكن إرساله كـ JSON string
+            quantity,
             expirationDate,
             expirationTime,
             isHygieneAssured
         } = req.body;
 
         // التحقق من الحقول الأساسية
-        if (!donorId || !title || !foodType || !expirationDate || !expirationTime || !isHygieneAssured) {
+        if (!donorId || !title || !foodType || !expirationDate || !expirationTime || isHygieneAssured === undefined || isHygieneAssured === null) {
             return res.status(400).json({
                 success: false,
                 message: 'All required fields must be filled'

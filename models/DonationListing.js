@@ -18,7 +18,7 @@ const donationListingSchema = new mongoose.Schema({
     foodType: {
         type: String,
         required: true,
-        enum: ['Cooked Food-Veg & NonVeg', 'Raw Ingredients', 'Bakery', 'Dairy'], 
+        enum: ['Cooked Food-Veg & NonVeg', 'Cooked Food-Veg', 'Cooked Food-NonVeg', 'Raw Food', 'Bakery', 'Dairy'], 
     },
     quantity: {
         veg: {
