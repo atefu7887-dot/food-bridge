@@ -7,7 +7,7 @@ const User = require('../models/User');
 
 const router = express.Router();
 
-// ✅ Multer
+
 const upload = multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: 5 * 1024 * 1024 }
@@ -19,7 +19,7 @@ const uploadFields = upload.fields([
     { name: 'licenseImage', maxCount: 1 }
 ]);
 
-// ✅ ImgBB Upload
+
 async function uploadToImgBB(buffer) {
     const apiKey = "e588c3e5bae57852fb441c6f15619cad";
 
@@ -41,7 +41,7 @@ async function uploadToImgBB(buffer) {
 }
 
 //////////////////////////////////////////////////
-// 🔐 LOGIN (تم إصلاح المشكلة هنا)
+// 🔐 LOGIN
 //////////////////////////////////////////////////
 router.post('/login', async (req, res) => {
     const { email, password } = req.body;
@@ -65,7 +65,6 @@ router.post('/login', async (req, res) => {
             });
         }
 
-        // ✅ رجّع المستخدم كامل (المهم!)
         res.status(200).json({
             success: true,
             message: "Login successful ✅",
@@ -91,7 +90,7 @@ router.post('/register', uploadFields, async (req, res) => {
             donorType, businessName, address, receiverType, availability
         } = req.body;
 
-        // 🔴 Validation
+        // 🔴 Validation الأساسي
         if (!username || !email || !phone || !password || !role) {
             return res.status(400).json({
                 success: false,
@@ -99,7 +98,7 @@ router.post('/register', uploadFields, async (req, res) => {
             });
         }
 
-        // 🔍 Check existing
+        // 🔍 التحقق إذا كان المستخدم موجوداً مسبقاً
         const existingUser = await User.findOne({ email });
         if (existingUser) {
             return res.status(400).json({
@@ -108,7 +107,7 @@ router.post('/register', uploadFields, async (req, res) => {
             });
         }
 
-        // 🔐 Hash password
+ 
         const hashedPassword = await bcrypt.hash(password, 10);
 
         let userData = {
@@ -117,12 +116,15 @@ router.post('/register', uploadFields, async (req, res) => {
             phone,
             password: hashedPassword,
             role,
-            photos: []
+            photos: [],
         };
 
-        //////////////////////////////////////////////////
-        // 🖼️ Photos (Donor / Receiver)
-        //////////////////////////////////////////////////
+   
+        if (role !== 'Driver' && businessName) {
+            userData.businessName = businessName;
+        }
+
+
         if ((role === 'Donor' || role === 'Receiver') && req.files?.photos) {
             for (const file of req.files.photos) {
                 try {
@@ -134,11 +136,7 @@ router.post('/register', uploadFields, async (req, res) => {
             }
         }
 
-        //////////////////////////////////////////////////
-        // 🚚 Driver
-        //////////////////////////////////////////////////
         if (role === 'Driver') {
-
             // Avatar
             if (req.files?.avatar?.length > 0) {
                 try {
@@ -176,14 +174,9 @@ router.post('/register', uploadFields, async (req, res) => {
             }
         }
 
-        //////////////////////////////////////////////////
-        // 💾 Save
-        //////////////////////////////////////////////////
         const newUser = await User.create(userData);
 
-        //////////////////////////////////////////////////
-        // ✅ Response
-        //////////////////////////////////////////////////
+  
         res.status(201).json({
             success: true,
             message: "Account Created Successfully 🎉",

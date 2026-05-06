@@ -31,6 +31,16 @@ const userSchema = new mongoose.Schema({
     },
     businessName: {
         type: String,
+        validate: {
+            validator: function (value) {
+          
+                if (this.role === 'Driver') {
+                    return !value || value.trim() === '';
+                }
+                return true;
+            },
+            message: 'Business name is not allowed for the Driver role.'
+        }
     },
     receiverType: {
         type: String,
