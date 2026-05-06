@@ -19,6 +19,7 @@ const donationRoutes = require('./routes/donationRoutes');
 
 app.use('/auth', authRouter);
 app.use('/auth/forgot-password', forgotPasswordRouter);
+app.use('/api/donations', donationRoutes);
 
 
 
