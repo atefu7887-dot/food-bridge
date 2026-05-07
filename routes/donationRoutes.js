@@ -1,34 +1,92 @@
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
+const axios = require('axios');
+const FormData = require('form-data');
 const Donation = require('../models/Donation');
 const User = require('../models/User');
 
-// ==========================================
-// 1. مسارات المتبرع (Donor)
-// ==========================================
 
-// ➕ إضافة تبرع جديد
-router.post('/add', async (req, res) => {
+const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 5 * 1024 * 1024 }
+});
+
+
+async function uploadToImgBB(buffer) {
+    const apiKey = "e588c3e5bae57852fb441c6f15619cad";
+    const formData = new FormData();
+ 
+    formData.append('image', buffer.toString('base64'));
+
     try {
-        const { donorId, itemDetails, quantity, location, expiryDate, receiverId } = req.body;
-        
+        const res = await axios.post(
+            `https://api.imgbb.com/1/upload?key=${apiKey}`,
+            formData,
+            { headers: formData.getHeaders() }
+        );
+        return res.data.data.url;
+    } catch (err) {
+        console.error("ImgBB Error:", err.message);
+        throw new Error("Image upload failed");
+    }
+}
+
+
+router.post('/add', upload.array('photos', 5), async (req, res) => {
+    try {
+        const { 
+            donorId, 
+            title, 
+            foodType, 
+            itemDetails, 
+            quantity, 
+            vegQty, 
+            nonVegQty, 
+            location, 
+            contactPhone,
+            expiryDate,
+            receiverId 
+        } = req.body;
+
+        // 1. التحقق من وجود المتبرع
         const donor = await User.findById(donorId);
-        if (!donor || donor.role !== 'Donor') {
-            return res.status(400).json({ success: false, message: 'Invalid donor' });
+        if (!donor) {
+            return res.status(400).json({ success: false, message: 'Donor not found' });
         }
 
+        // 2. معالجة الصور المتعددة باستخدام دالتك
+        let imageUrls = [];
+        if (req.files && req.files.length > 0) {
+            // تنفيذ الرفع بالتوازي لضمان سرعة الاستجابة
+            const uploadPromises = req.files.map(file => uploadToImgBB(file.buffer));
+            imageUrls = await Promise.all(uploadPromises);
+        }
+
+        // 3. إنشاء سجل التبرع الجديد
         const newDonation = new Donation({
             donor: donorId,
             receiver: receiverId || null,
-            itemDetails, 
-            quantity, 
-            location, 
-            expiryDate
+            title: title,
+            foodType: foodType,
+            itemDetails: itemDetails,
+            quantity: parseInt(quantity), // تحويل لنوع Number لضمان صحة البيانات
+            breakdown: {
+                veg: parseInt(vegQty) || 0,
+                nonVeg: parseInt(nonVegQty) || 0
+            },
+            images: imageUrls, // تخزين مصفوفة الروابط من ImgBB
+            location: location,
+            contactPhone: contactPhone || donor.phone,
+            expiryDate: expiryDate,
+            status: 'Pending'
         });
 
         await newDonation.save();
-        res.status(201).json({ success: true, donation: newDonation });
+        res.status(201).json({ success: true, message: "Donation added successfully!", donation: newDonation });
+
     } catch (error) {
+        console.error("Add Donation Error:", error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -46,14 +104,12 @@ router.get('/donor-donations/:donorId', async (req, res) => {
     }
 });
 
-// 🏛️ جلب الجمعيات المتاحة (لإظهارها للمتبرع في الواجهة)
+// 🏛️ جلب الجمعيات المتاحة
 router.get('/available-ngos', async (req, res) => {
     try {
-        // نجلب المستخدمين الذين دورهم "Receiver" فقط
         const ngos = await User.find({ role: 'Receiver' })
             .select('username email phone address avatar receiverType bio photos')
             .lean();
-            
         res.status(200).json({ success: true, ngos });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
@@ -64,7 +120,7 @@ router.get('/available-ngos', async (req, res) => {
 // 2. مسارات الجمعية (Receiver / NGO)
 // ==========================================
 
-// 🔍 التبرعات المتاحة في السوق (التي لم تحجزها أي جمعية بعد)
+// 🔍 التبرعات المتاحة في السوق
 router.get('/available-for-ngo', async (req, res) => {
     try {
         const donations = await Donation.find({ status: 'Pending', receiver: null })
@@ -82,11 +138,10 @@ router.patch('/:id/request-donation', async (req, res) => {
         const donation = await Donation.findById(req.params.id);
         
         if (!donation || donation.receiver !== null) {
-            return res.status(400).json({ success: false, message: 'هذا التبرع محجوز بالفعل أو غير موجود' });
+            return res.status(400).json({ success: false, message: 'Donation already taken or not found' });
         }
 
         donation.receiver = receiverId;
-        // الحالة تبقى Pending حتى يتم تعيين سائق ويقبل المهمة
         await donation.save();
         res.status(200).json({ success: true, donation });
     } catch (error) {
@@ -94,7 +149,7 @@ router.patch('/:id/request-donation', async (req, res) => {
     }
 });
 
-// 📋 جلب التبرعات التي حجزتها جمعية معينة
+// 📋 جلب التبرعات الخاصة بجمعية معينة
 router.get('/my-ngo-donations/:receiverId', async (req, res) => {
     try {
         const donations = await Donation.find({ receiver: req.params.receiverId })
@@ -107,42 +162,11 @@ router.get('/my-ngo-donations/:receiverId', async (req, res) => {
     }
 });
 
-// 🚚 جلب قائمة السائقين المتاحين للتعيين
-router.get('/available-drivers', async (req, res) => {
-    try {
-        const drivers = await User.find({ role: 'Driver' })
-            .select('username phone email avatar availability');
-        res.status(200).json({ success: true, drivers });
-    } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
-    }
-});
-
-// 🎯 تعيين سائق لمهمة معينة
-router.patch('/:id/assign-driver', async (req, res) => {
-    try {
-        const { driverId, receiverId } = req.body;
-        const donation = await Donation.findById(req.params.id);
-        
-        if (!donation) return res.status(404).json({ success: false, message: 'Donation not found' });
-        if (donation.receiver.toString() !== receiverId) {
-            return res.status(403).json({ success: false, message: 'Unauthorized action' });
-        }
-
-        donation.driver = driverId;
-        donation.status = 'Assigned'; // بانتظار قبول السائق
-        await donation.save();
-        res.status(200).json({ success: true, message: 'Driver assigned successfully' });
-    } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
-    }
-});
-
 // ==========================================
 // 3. مسارات السائق (Driver)
 // ==========================================
 
-// 📋 عرض المهام الموكلة للسائق (الجديدة والمكتملة)
+// 📋 عرض المهام الموكلة للسائق
 router.get('/my-tasks/:driverId', async (req, res) => {
     try {
         const tasks = await Donation.find({ driver: req.params.driverId })
@@ -155,40 +179,7 @@ router.get('/my-tasks/:driverId', async (req, res) => {
     }
 });
 
-// ✅ قبول المهمة من قبل السائق
-router.patch('/:id/driver-accept', async (req, res) => {
-    try {
-        const { driverId } = req.body;
-        const donation = await Donation.findOne({ _id: req.params.id, driver: driverId });
-        
-        if (!donation) return res.status(404).json({ success: false, message: 'Task not found' });
-
-        donation.status = 'Accepted'; 
-        await donation.save();
-        res.status(200).json({ success: true, message: 'Task Accepted' });
-    } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
-    }
-});
-
-// ❌ رفض المهمة من قبل السائق
-router.patch('/:id/driver-reject', async (req, res) => {
-    try {
-        const { driverId } = req.body;
-        const donation = await Donation.findOne({ _id: req.params.id, driver: driverId });
-        
-        if (!donation) return res.status(404).json({ success: false, message: 'Task not found' });
-
-        donation.driver = null; // إزالة السائق لإتاحة تعيين غيره
-        donation.status = 'Pending'; 
-        await donation.save();
-        res.status(200).json({ success: true, message: 'Task Rejected' });
-    } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
-    }
-});
-
-// 🔄 تحديث الحالة (تم الاستلام / تم التوصيل)
+// 🔄 تحديث الحالة من قبل السائق
 router.patch('/:id/update-status', async (req, res) => {
     try {
         const { status, driverId } = req.body;
@@ -196,9 +187,9 @@ router.patch('/:id/update-status', async (req, res) => {
         
         if (!donation) return res.status(404).json({ success: false, message: 'Task not found' });
 
-        donation.status = status; // مثل 'Picked Up' أو 'Delivered'
+        donation.status = status; 
         await donation.save();
-        res.status(200).json({ success: true, message: `Status updated to ${status}` });
+        res.status(200).json({ success: true, message: `Status updated to ${status}`, donation });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }

@@ -8,26 +8,46 @@ const donationSchema = new mongoose.Schema({
     },
     receiver: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'User', // يمكن أن تكون جمعية (NGO) أو جهة استقبال
+        ref: 'User',
     },
     driver: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'User', // السائق الذي سيقوم بالتوصيل
+        ref: 'User',
     },
-    itemDetails: {
+    title: { 
+        type: String, 
+        required: true 
+    },
+    foodType: { 
+        type: String, 
+        enum: ['Cooked Food-Veg & NonVeg', 'Veg Only', 'NonVeg Only', 'Other'],
+        default: 'Cooked Food-Veg & NonVeg'
+    },
+    description: { 
         type: String,
         required: true,
     },
-    quantity: {
-        type: Number,
+    quantity: { 
+        type: Number, 
         required: true,
+    },
+    breakdown: {
+        veg: { type: Number, default: 0 },
+        nonVeg: { type: Number, default: 0 }
+    },
+    images: { 
+        type: [String], 
+        default: [] 
+    },
+    contactPhone: { 
+        type: String 
     },
     status: {
         type: String,
-        enum: ['Pending', 'Assigned', 'Picked Up', 'Delivered'],
+        enum: ['Pending', 'Assigned', 'Picked Up', 'Delivered', 'Accepted'],
         default: 'Pending',
     },
-    location: {
+    location: { 
         type: String,
         required: true,
     },
