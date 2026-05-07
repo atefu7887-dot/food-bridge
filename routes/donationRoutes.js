@@ -31,12 +31,15 @@ router.post('/add', async (req, res) => {
     }
 });
 
-// 2. 📋 عرض الطلبات المتاحة (للسائقين - الحالة Pending)
+// 2. 📋 عرض الطلبات المتاحة (للسائقين - الطلبات التي حجزتها جمعية وينتظر توصيلها)
 router.get('/available-requests', async (req, res) => {
     try {
-        const donations = await Donation.find({ status: 'Pending' })
-            .populate('donor', 'username email phone')
-            .populate('receiver', 'username email address');
+        const donations = await Donation.find({ 
+            status: 'Pending', 
+            receiver: { $ne: null } // $ne تعني Not Equal (أي أن هناك جمعية وافقت عليه)
+        })
+        .populate('donor', 'username email phone')
+        .populate('receiver', 'username email address');
 
         res.status(200).json({ success: true, donations });
     } catch (error) {
