@@ -159,4 +159,26 @@ router.get('/receiver-donations/:receiverId', async (req, res) => {
     }
 });
 
+// 8. 👤 عرض التبرعات الخاصة بالمتبرع (تاريخ التبرعات)
+router.get('/donor-donations/:donorId', async (req, res) => {
+    try {
+        const { donorId } = req.params;
+
+        // جلب التبرعات التي قام بها هذا المتبرع وترتيبها من الأحدث للأقدم
+        const donations = await Donation.find({ donor: donorId })
+            .populate('receiver', 'username email phone address') // إظهار بيانات الجمعية المستلمة
+            .populate('driver', 'username phone')               // إظهار بيانات السائق
+            .sort({ createdAt: -1 }); // الترتيب التنازلي حسب وقت الإنشاء
+
+        res.status(200).json({ 
+            success: true, 
+            count: donations.length,
+            donations 
+        });
+    } catch (error) {
+        console.error('Fetch Donor Donations Error:', error);
+        res.status(500).json({ success: false, message: 'Server error', error: error.message });
+    }
+});
+
 module.exports = router;
