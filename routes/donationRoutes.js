@@ -34,10 +34,10 @@ async function uploadToImgBB(buffer) {
 // 1. ➕ إضافة تبرع جديد
 router.post('/add', upload.array('photos', 5), async (req, res) => {
     try {
-        const { 
-            donorId, title, foodType, itemDetails, quantity, 
-            vegQty, nonVegQty, location, contactPhone, 
-            expiryDate, expiryTime, isQualityAssured, receiverId 
+        const {
+            donorId, title, foodType, itemDetails, quantity,
+            vegQty, nonVegQty, location, contactPhone,
+            expiryDate, expiryTime, isQualityAssured, receiverId
         } = req.body;
 
         const donor = await User.findById(donorId);
@@ -200,18 +200,62 @@ router.get('/my-tasks/:driverId', async (req, res) => {
 router.patch('/:id/update-status', async (req, res) => {
     try {
         const { status, driverId } = req.body;
-        const donation = await Donation.findOneAndUpdate(
-            { _id: req.params.id, driver: driverId },
-            { status },
+
+        // التحقق من أن الحالة المرسلة ضمن الحالات المسموح بها في الموديل
+        const allowedStatuses = ['Pending', 'Accepted', 'Assigned', 'Picked Up', 'Delivered'];
+        if (status && !allowedStatuses.includes(status)) {
+            return res.status(400).json({ success: false, message: 'Invalid status value' });
+        }
+
+        const updatePayload = { status };
+        if (driverId) updatePayload.driver = driverId;
+
+        const donation = await Donation.findByIdAndUpdate(
+            req.params.id,
+            updatePayload,
             { new: true }
-        );
-        if (!donation) return res.status(404).json({ success: false, message: 'Task not found' });
+        )
+            .populate('donor', 'username phone avatar')
+            .populate('receiver', 'username avatar address')
+            .populate('driver', 'username phone avatar');
+
+        if (!donation) return res.status(404).json({ success: false, message: 'Donation not found' });
+
         res.status(200).json({ success: true, donation });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
 });
 
+router.patch('/:id/update-status', async (req, res) => {
+    try {
+        const { status, driverId } = req.body;
+
+      
+        const allowedStatuses = ['Pending', 'Accepted', 'Assigned', 'Picked Up', 'Delivered'];
+        if (status && !allowedStatuses.includes(status)) {
+            return res.status(400).json({ success: false, message: 'Invalid status value' });
+        }
+
+        const updatePayload = { status };
+        if (driverId) updatePayload.driver = driverId;
+
+        const donation = await Donation.findByIdAndUpdate(
+            req.params.id,
+            updatePayload,
+            { new: true }
+        )
+            .populate('donor', 'username phone avatar')
+            .populate('receiver', 'username avatar address')
+            .populate('driver', 'username phone avatar');
+
+        if (!donation) return res.status(404).json({ success: false, message: 'Donation not found' });
+
+        res.status(200).json({ success: true, donation });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
 // 🏛️ جلب الجمعيات المتاحة (NGOs)
 router.get('/available-ngos', async (req, res) => {
     try {
@@ -224,5 +268,25 @@ router.get('/available-ngos', async (req, res) => {
     }
 });
 
+// جلب التبرعات النشطة فقط (التي لم تنتهِ بعد)
+router.get('/donor-active/:donorId', async (req, res) => {
+    try {
+        const activeDonations = await Donation.find({
+            donor: req.params.donorId,
+            status: { $ne: 'Delivered' } // أي حالة غير 'تم التوصيل'
+        })
+            .populate('receiver', 'username avatar address')
+            .populate('driver', 'username phone avatar')
+            .sort({ updatedAt: -1 });
+
+        res.status(200).json({
+            success: true,
+            count: activeDonations.length,
+            donations: activeDonations
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
 
 module.exports = router;

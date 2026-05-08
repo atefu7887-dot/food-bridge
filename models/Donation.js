@@ -1,10 +1,9 @@
-const mongoose = require('mongoose'); // <--- السطر ده هو اللي ناقصك!
+const mongoose = require('mongoose');
 
 const donationSchema = new mongoose.Schema({
     donor: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     receiver: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     driver: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-    
     title: { type: String, required: true },
     description: { type: String, required: true },
     foodType: { 
@@ -13,7 +12,6 @@ const donationSchema = new mongoose.Schema({
         default: 'Cooked Food-Veg & NonVeg'
     },
     quantity: { type: Number, required: true },
-    
     breakdown: {
         veg: { type: Number, default: 0 },
         nonVeg: { type: Number, default: 0 }
@@ -21,18 +19,31 @@ const donationSchema = new mongoose.Schema({
     images: { type: [String], default: [] },
     location: { type: String, required: true },
     contactPhone: { type: String },
-    
-    // --- الإضافات الجديدة ---
     expiryDate: { type: Date },      
     expiryTime: { type: String },    
     isQualityAssured: { type: Boolean, default: false }, 
-    
     status: {
         type: String,
-        enum: ['Pending', 'Assigned', 'Picked Up', 'Delivered', 'Accepted'],
+        enum: ['Pending', 'Accepted', 'Assigned', 'Picked Up', 'Delivered'],
         default: 'Pending',
     }
-}, { timestamps: true });
+}, { 
+    timestamps: true,
+    toJSON: { virtuals: true }, 
+    toObject: { virtuals: true }
+});
+
+
+donationSchema.virtual('progressValue').get(function() {
+    const statusMap = {
+        'Pending': 0.2,    
+        'Accepted': 0.4,   
+        'Assigned': 0.6,   
+        'Picked Up': 0.8,  
+        'Delivered': 1.0   
+    };
+    return statusMap[this.status] || 0.1;
+});
 
 const Donation = mongoose.model('Donation', donationSchema);
 module.exports = Donation;
