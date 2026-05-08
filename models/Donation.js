@@ -1,5 +1,6 @@
+const mongoose = require('mongoose'); // <--- السطر ده هو اللي ناقصك!
+
 const donationSchema = new mongoose.Schema({
-    // ... الحقول القديمة كما هي
     donor: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     receiver: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     driver: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
@@ -21,10 +22,10 @@ const donationSchema = new mongoose.Schema({
     location: { type: String, required: true },
     contactPhone: { type: String },
     
-    // --- الإضافات الجديدة لتطابق الصور ---
-    expiryDate: { type: Date },      // Expiration Date
-    expiryTime: { type: String },    // Expiration Time (مثلاً "10:00 PM")
-    isQualityAssured: { type: Boolean, default: false }, // حقل التأكيد (I assure...)
+    // --- الإضافات الجديدة ---
+    expiryDate: { type: Date },      
+    expiryTime: { type: String },    
+    isQualityAssured: { type: Boolean, default: false }, 
     
     status: {
         type: String,
@@ -32,3 +33,6 @@ const donationSchema = new mongoose.Schema({
         default: 'Pending',
     }
 }, { timestamps: true });
+
+const Donation = mongoose.model('Donation', donationSchema);
+module.exports = Donation;
