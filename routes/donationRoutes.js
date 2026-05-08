@@ -46,44 +46,42 @@ router.post('/add', upload.array('photos', 5), async (req, res) => {
             location, 
             contactPhone,
             expiryDate,
+            expiryTime,        // الجديد
+            isQualityAssured,  // الجديد
             receiverId 
         } = req.body;
 
-        // 1. التحقق من وجود المتبرع
         const donor = await User.findById(donorId);
-        if (!donor) {
-            return res.status(400).json({ success: false, message: 'Donor not found' });
-        }
+        if (!donor) return res.status(400).json({ success: false, message: 'Donor not found' });
 
-        // 2. معالجة الصور المتعددة باستخدام دالتك
         let imageUrls = [];
         if (req.files && req.files.length > 0) {
-            // تنفيذ الرفع بالتوازي لضمان سرعة الاستجابة
             const uploadPromises = req.files.map(file => uploadToImgBB(file.buffer));
             imageUrls = await Promise.all(uploadPromises);
         }
 
-        // 3. إنشاء سجل التبرع الجديد
         const newDonation = new Donation({
             donor: donorId,
             receiver: receiverId || null,
-            title: title,
-            foodType: foodType,
-            itemDetails: itemDetails,
-            quantity: parseInt(quantity), // تحويل لنوع Number لضمان صحة البيانات
+            title,
+            foodType,
+            description: itemDetails, // itemDetails هو الـ Description في الـ UI
+            quantity: parseInt(quantity),
             breakdown: {
                 veg: parseInt(vegQty) || 0,
                 nonVeg: parseInt(nonVegQty) || 0
             },
-            images: imageUrls, // تخزين مصفوفة الروابط من ImgBB
-            location: location,
+            images: imageUrls,
+            location,
             contactPhone: contactPhone || donor.phone,
-            expiryDate: expiryDate,
+            expiryDate,
+            expiryTime,        // تخزين الوقت
+            isQualityAssured: isQualityAssured === 'true' || isQualityAssured === true, // التعامل مع FormData
             status: 'Pending'
         });
 
         await newDonation.save();
-        res.status(201).json({ success: true, message: "Donation added successfully!", donation: newDonation });
+        res.status(201).json({ success: true, message: "Donation created!", donation: newDonation });
 
     } catch (error) {
         console.error("Add Donation Error:", error);
