@@ -318,4 +318,64 @@ router.delete('/:id/cancel', async (req, res) => {
     }
 });
 
+
+// 📝 تعديل بيانات التبرع (Update Donation)
+// يسمح بالتعديل فقط إذا كانت الحالة لا تزال Pending
+router.patch('/:id/update', upload.array('photos', 5), async (req, res) => {
+    try {
+        const donationId = req.params.id;
+        const { title, foodType, itemDetails, quantity, vegQty, nonVegQty, location, contactPhone } = req.body;
+
+        // 1. البحث عن التبرع
+        const donation = await Donation.findById(donationId);
+        if (!donation) {
+            return res.status(404).json({ success: false, message: 'Donation not found' });
+        }
+
+        // 2. 🛡️ شرط الأمان: التعديل مسموح فقط في حالة الانتظار Pending
+        if (donation.status !== 'Pending') {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'لا يمكن تعديل التبرع بعد أن تم قبوله أو البدء في توصيله.' 
+            });
+        }
+
+        // 3. معالجة الصور الجديدة إذا تم رفعها
+        let imageUrls = donation.images; // الاحتفاظ بالصور القديمة كافتراضي
+        if (req.files && req.files.length > 0) {
+            const uploadPromises = req.files.map(file => uploadToImgBB(file.buffer));
+            imageUrls = await Promise.all(uploadPromises); // استبدال الصور القديمة بالجديدة
+        }
+
+        // 4. تحديث البيانات
+        const updatedDonation = await Donation.findByIdAndUpdate(
+            donationId,
+            {
+                title,
+                foodType,
+                description: itemDetails,
+                quantity: parseInt(quantity),
+                breakdown: {
+                    veg: parseInt(vegQty) || 0,
+                    nonVeg: parseInt(nonVegQty) || 0
+                },
+                images: imageUrls,
+                location,
+                contactPhone
+            },
+            { new: true } // لإرجاع البيانات الجديدة بعد التعديل
+        );
+
+        res.status(200).json({ 
+            success: true, 
+            message: "تم تحديث التبرع بنجاح", 
+            donation: updatedDonation 
+        });
+
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+
 module.exports = router;
