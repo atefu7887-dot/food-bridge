@@ -90,14 +90,40 @@ router.get('/available-drivers', async (req, res) => {
 });
 
 // 3. 🎯 تعيين سائق لطلب معين (بواسطة الجمعية)
+// 🎯 تعيين سائق لطلب معين (بواسطة الجمعية)
 router.patch('/:id/assign-driver', async (req, res) => {
     try {
         const { driverId } = req.body;
-        const donation = await Donation.findByIdAndUpdate(
-            req.params.id,
-            { driver: driverId, status: 'Assigned' },
-            { new: true }
-        );
+        
+        // جلب التبرع للتأكد من حالته
+        const donation = await Donation.findById(req.params.id);
+
+        if (!donation) {
+            return res.status(404).json({ success: false, message: 'Donation not found' });
+        }
+
+        // 🛡️ القيد الجديد: التأكد من موافقة المتبرع أولاً
+        // إذا كانت الحالة لا تزال Pending Approval، فهذا يعني أن المتبرع لم يوافق بعد
+        if (donation.status === 'Pending Approval') {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'لا يمكنك تعيين سائق حتى يوافق المتبرع على طلب الاستلام أولاً.' 
+            });
+        }
+
+        // التأكد من أن الحالة هي Accepted فقط (أو حالات تسمح بالتعيين)
+        if (donation.status !== 'Accepted') {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'حالة الطلب الحالية لا تسمح بتعيين سائق.' 
+            });
+        }
+
+        // تحديث البيانات إذا اجتاز الشروط
+        donation.driver = driverId;
+        donation.status = 'Assigned';
+        await donation.save();
+
         res.status(200).json({ success: true, donation });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
