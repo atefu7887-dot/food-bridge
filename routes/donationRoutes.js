@@ -212,4 +212,17 @@ router.patch('/:id/update-status', async (req, res) => {
     }
 });
 
+// 🏛️ جلب الجمعيات المتاحة (NGOs)
+router.get('/available-ngos', async (req, res) => {
+    try {
+        const ngos = await User.find({ role: 'Receiver' }) // تأكد أن الـ Role في الداتا بيز Receiver
+            .select('username email phone address avatar receiverType bio photos')
+            .lean();
+        res.status(200).json({ success: true, ngos });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+
 module.exports = router;
