@@ -23,10 +23,10 @@ const donationSchema = new mongoose.Schema({
     expiryTime: { type: String },    
     isQualityAssured: { type: Boolean, default: false }, 
     status: {
-        type: String,
-        enum: ['Pending', 'Accepted', 'Assigned', 'Picked Up', 'Delivered'],
-        default: 'Pending',
-    }
+    type: String,
+    enum: ['Pending', 'Pending Approval', 'Accepted', 'Assigned', 'Picked Up', 'Delivered'],
+    default: 'Pending',
+}
 }, { 
     timestamps: true,
     toJSON: { virtuals: true }, 

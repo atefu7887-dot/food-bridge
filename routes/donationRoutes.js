@@ -231,7 +231,7 @@ router.patch('/:id/update-status', async (req, res) => {
     try {
         const { status, driverId } = req.body;
 
-      
+
         const allowedStatuses = ['Pending', 'Accepted', 'Assigned', 'Picked Up', 'Delivered'];
         if (status && !allowedStatuses.includes(status)) {
             return res.status(400).json({ success: false, message: 'Invalid status value' });
@@ -304,14 +304,14 @@ router.delete('/:id/cancel', async (req, res) => {
         // 🛡️ شرط أمان: لا يمكن الإلغاء إلا إذا كانت الحالة Pending
         // لو الجمعية وافقت أو السائق استلم، مينفعش المتبرع يحذف فجأة
         if (donation.status !== 'Pending') {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'Cannot cancel donation after it has been accepted or assigned.' 
+            return res.status(400).json({
+                success: false,
+                message: 'Cannot cancel donation after it has been accepted or assigned.'
             });
         }
 
         await Donation.findByIdAndDelete(donationId);
-        
+
         res.status(200).json({ success: true, message: 'Donation cancelled successfully' });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
@@ -334,9 +334,9 @@ router.patch('/:id/update', upload.array('photos', 5), async (req, res) => {
 
         // 2. 🛡️ شرط الأمان: التعديل مسموح فقط في حالة الانتظار Pending
         if (donation.status !== 'Pending') {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'لا يمكن تعديل التبرع بعد أن تم قبوله أو البدء في توصيله.' 
+            return res.status(400).json({
+                success: false,
+                message: 'لا يمكن تعديل التبرع بعد أن تم قبوله أو البدء في توصيله.'
             });
         }
 
@@ -366,10 +366,10 @@ router.patch('/:id/update', upload.array('photos', 5), async (req, res) => {
             { new: true } // لإرجاع البيانات الجديدة بعد التعديل
         );
 
-        res.status(200).json({ 
-            success: true, 
-            message: "تم تحديث التبرع بنجاح", 
-            donation: updatedDonation 
+        res.status(200).json({
+            success: true,
+            message: "تم تحديث التبرع بنجاح",
+            donation: updatedDonation
         });
 
     } catch (error) {
@@ -377,5 +377,75 @@ router.patch('/:id/update', upload.array('photos', 5), async (req, res) => {
     }
 });
 
+// في ملف routes/donations.js
 
+router.patch('/:id/claim', async (req, res) => {
+    try {
+        const { receiverId } = req.body;
+        const donation = await Donation.findById(req.params.id).populate('donor');
+        const receiver = await User.findById(receiverId);
+
+        if (!donation || donation.receiver) {
+            return res.status(400).json({ success: false, message: 'تبرع غير موجود أو محجوز مسبقاً' });
+        }
+
+        // تحديث التبرع
+        donation.receiver = receiverId;
+        donation.status = 'Pending Approval'; // حالة الانتظار
+        await donation.save();
+
+        // 🔔 إرسال إشعار للمتبرع
+        const donor = donation.donor;
+        if (donor && donor.fcmToken) {
+            sendNotification(
+                donor.fcmToken,
+                "طلب استلام جديد 📥",
+                `ترغب جمعية (${receiver.username}) في استلام تبرعك: ${donation.title}`
+            );
+        }
+
+        res.status(200).json({ success: true, message: 'تم إرسال طلبك للمتبرع بنجاح' });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ✅ مسار الموافقة
+router.patch('/:id/approve-claim', async (req, res) => {
+    try {
+        const donation = await Donation.findByIdAndUpdate(
+            req.params.id,
+            { status: 'Accepted' },
+            { new: true }
+        ).populate('receiver');
+
+        // 🔔 إرسال إشعار للجمعية بالموافقة
+        const receiver = donation.receiver;
+        if (receiver && receiver.fcmToken) {
+            sendNotification(receiver.fcmToken, "تمت الموافقة! 🎉", "وافق المتبرع على طلب استلام الطعام، يمكنك الآن تعيين سائق.");
+        }
+
+        res.status(200).json({ success: true, message: 'تمت الموافقة على الطلب' });
+    } catch (error) { /* error handling */ }
+});
+
+// ❌ مسار الرفض
+router.patch('/:id/reject-claim', async (req, res) => {
+    try {
+        const donation = await Donation.findById(req.params.id).populate('receiver');
+        const receiver = donation.receiver;
+
+        // إعادة التبرع للحالة العامة وحذف الجمعية منه
+        donation.receiver = null;
+        donation.status = 'Pending';
+        await donation.save();
+
+        // 🔔 إرسال إشعار للجمعية بالرفض
+        if (receiver && receiver.fcmToken) {
+            sendNotification(receiver.fcmToken, "نعتذر منك 😔", "تم رفض طلب الاستلام من قبل المتبرع.");
+        }
+
+        res.status(200).json({ success: true, message: 'تم رفض الطلب وإعادة التبرع للقائمة' });
+    } catch (error) { /* error handling */ }
+});
 module.exports = router;
