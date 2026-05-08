@@ -22,6 +22,18 @@ const donationSchema = new mongoose.Schema({
     expiryDate: { type: Date },      
     expiryTime: { type: String },    
     isQualityAssured: { type: Boolean, default: false }, 
+    // 📍 إحداثيات السائق للتتبع اللحظي
+    driverLocation: {
+        lat: { type: Number, default: 30.5852 }, // إحداثيات افتراضية (الزقازيق)
+        lng: { type: Number, default: 31.5035 }
+    },
+
+    // 🕒 سجل المواعيد (لإظهار الوقت في الـ Timeline)
+    timeline: {
+        assignedAt: { type: Date },
+        pickedUpAt: { type: Date },
+        deliveredAt: { type: Date }
+    },
     status: {
     type: String,
     enum: ['Pending', 'Pending Approval', 'Accepted', 'Assigned', 'Picked Up', 'Delivered'],

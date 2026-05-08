@@ -89,42 +89,27 @@ router.get('/available-drivers', async (req, res) => {
     }
 });
 
-// 3. 🎯 تعيين سائق لطلب معين (بواسطة الجمعية)
-// 🎯 تعيين سائق لطلب معين (بواسطة الجمعية)
 router.patch('/:id/assign-driver', async (req, res) => {
     try {
         const { driverId } = req.body;
-        
-        // جلب التبرع للتأكد من حالته
         const donation = await Donation.findById(req.params.id);
 
-        if (!donation) {
-            return res.status(404).json({ success: false, message: 'Donation not found' });
-        }
-
-        // 🛡️ القيد الجديد: التأكد من موافقة المتبرع أولاً
-        // إذا كانت الحالة لا تزال Pending Approval، فهذا يعني أن المتبرع لم يوافق بعد
+        if (!donation) return res.status(404).json({ success: false, message: 'Donation not found' });
+        
+        // منع التعيين قبل موافقة المتبرع
         if (donation.status === 'Pending Approval') {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'لا يمكنك تعيين سائق حتى يوافق المتبرع على طلب الاستلام أولاً.' 
-            });
+            return res.status(400).json({ success: false, message: 'انتظر موافقة المتبرع أولاً' });
         }
 
-        // التأكد من أن الحالة هي Accepted فقط (أو حالات تسمح بالتعيين)
-        if (donation.status !== 'Accepted') {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'حالة الطلب الحالية لا تسمح بتعيين سائق.' 
-            });
-        }
-
-        // تحديث البيانات إذا اجتاز الشروط
         donation.driver = driverId;
         donation.status = 'Assigned';
+        donation.timeline.assignedAt = Date.now(); // 🕒 تسجيل وقت التعيين
         await donation.save();
 
-        res.status(200).json({ success: true, donation });
+        const populated = await Donation.findById(donation._id)
+            .populate('driver', 'username phone avatar'); // جلب صورة واسم السائق
+
+        res.status(200).json({ success: true, donation: populated });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -222,32 +207,27 @@ router.get('/my-tasks/:driverId', async (req, res) => {
     }
 });
 
-// 11. 🔄 تحديث حالة الطلب (Picked Up / Delivered)
 router.patch('/:id/update-status', async (req, res) => {
     try {
-        const { status, driverId } = req.body;
+        const { status } = req.body;
+        const donation = await Donation.findById(req.params.id);
 
-        // التحقق من أن الحالة المرسلة ضمن الحالات المسموح بها في الموديل
-        const allowedStatuses = ['Pending', 'Accepted', 'Assigned', 'Picked Up', 'Delivered'];
-        if (status && !allowedStatuses.includes(status)) {
-            return res.status(400).json({ success: false, message: 'Invalid status value' });
-        }
+        if (!donation) return res.status(404).json({ success: false, message: 'Donation not found' });
 
-        const updatePayload = { status };
-        if (driverId) updatePayload.driver = driverId;
+        donation.status = status;
 
-        const donation = await Donation.findByIdAndUpdate(
-            req.params.id,
-            updatePayload,
-            { new: true }
-        )
+        // 🕒 تحديث التوقيت الزمني بناءً على الحالة
+        if (status === 'Picked Up') donation.timeline.pickedUpAt = Date.now();
+        if (status === 'Delivered') donation.timeline.deliveredAt = Date.now();
+
+        await donation.save();
+
+        const result = await Donation.findById(donation._id)
             .populate('donor', 'username phone avatar')
             .populate('receiver', 'username avatar address')
             .populate('driver', 'username phone avatar');
 
-        if (!donation) return res.status(404).json({ success: false, message: 'Donation not found' });
-
-        res.status(200).json({ success: true, donation });
+        res.status(200).json({ success: true, donation: result });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -473,5 +453,23 @@ router.patch('/:id/reject-claim', async (req, res) => {
 
         res.status(200).json({ success: true, message: 'تم رفض الطلب وإعادة التبرع للقائمة' });
     } catch (error) { /* error handling */ }
+});
+
+// 📍 تحديث موقع السائق اللحظي (للتتبع على الخريطة)
+router.patch('/:id/update-location', async (req, res) => {
+    try {
+        const { lat, lng } = req.body;
+        const donation = await Donation.findByIdAndUpdate(
+            req.params.id,
+            { 
+                'driverLocation.lat': lat, 
+                'driverLocation.lng': lng 
+            },
+            { new: true }
+        );
+        res.status(200).json({ success: true, location: donation.driverLocation });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
 });
 module.exports = router;
