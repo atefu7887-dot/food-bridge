@@ -289,4 +289,33 @@ router.get('/donor-active/:donorId', async (req, res) => {
     }
 });
 
+// ❌ مسار إلغاء التبرع (Delete Donation)
+router.delete('/:id/cancel', async (req, res) => {
+    try {
+        const donationId = req.params.id;
+
+        // البحث عن التبرع للتأكد من حالته قبل الحذف
+        const donation = await Donation.findById(donationId);
+
+        if (!donation) {
+            return res.status(404).json({ success: false, message: 'Donation not found' });
+        }
+
+        // 🛡️ شرط أمان: لا يمكن الإلغاء إلا إذا كانت الحالة Pending
+        // لو الجمعية وافقت أو السائق استلم، مينفعش المتبرع يحذف فجأة
+        if (donation.status !== 'Pending') {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Cannot cancel donation after it has been accepted or assigned.' 
+            });
+        }
+
+        await Donation.findByIdAndDelete(donationId);
+        
+        res.status(200).json({ success: true, message: 'Donation cancelled successfully' });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 module.exports = router;
