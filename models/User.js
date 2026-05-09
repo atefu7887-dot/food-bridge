@@ -33,19 +33,10 @@ const userSchema = new mongoose.Schema({
         type: String,
         default: "",
     },
-    businessName: {
-        type: String,
-        validate: {
-            validator: function (value) {
-                // السائق فقط هو اللي ممنوع يكون له اسم نشاط تجاري
-                if (this.role === 'Driver') {
-                    return !value || value.trim() === '';
-                }
-                return true;
-            },
-            message: 'Business name is not allowed for the Driver role.'
-        }
-    },
+   businessName: {
+    type: String,
+    default: "", // يسمح بترك الحقل فارغاً ولا يسبب Server Error
+},
     address: {
         type: String,
     },

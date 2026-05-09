@@ -13,7 +13,7 @@ const upload = multer({
     limits: { fileSize: 5 * 1024 * 1024 } // الحد الأقصى 5 ميجا
 });
 
-// تعريف الحقول المسموح برفعها (تم حذف photos)
+// تعريف الحقول المسموح برفعها
 const uploadFields = upload.fields([
     { name: 'avatar', maxCount: 1 },
     { name: 'licenseImage', maxCount: 1 }
@@ -68,59 +68,62 @@ router.post('/register', uploadFields, async (req, res) => {
         // 3. تشفير كلمة المرور
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        // 4. تجهيز بيانات المستخدم
+        // 4. تجهيز بيانات المستخدم الأساسية
         let userData = {
             username,
             email,
             phone,
             password: hashedPassword,
             role,
-            address,
-            avatar: '', // سيتم ملؤه إذا تم رفع صورة
+            address: address || "",
+            avatar: '', 
         };
 
-        // --- التعبئة التلقائية للأنواع (Auto-Type Logic) ---
-        if (role === 'Donor') {
-            userData.donorType = 'Donor';
-            userData.businessName = businessName;
-        } else if (role === 'Receiver') {
-            userData.receiverType = 'Receiver';
-            userData.businessName = businessName;
+        // 5. منطق توزيع البيانات بناءً على الدور (الحل لمشكلة Donor/Receiver)
+        if (role === 'Donor' || role === 'Receiver') {
+            // نستخدم الاسم التجاري المرسل، وإذا لم يوجد نستخدم username كبديل لضمان عدم فشل الـ Validation
+            userData.businessName = businessName || username;
+            
+            if (role === 'Donor') userData.donorType = 'Donor';
+            if (role === 'Receiver') userData.receiverType = 'Receiver';
+        } else if (role === 'Driver') {
+            // للسائق نضمن عدم إرسال businessName نهائياً لتجنب تعارض الـ Validator
+            userData.businessName = undefined; 
         }
 
-        // 5. معالجة رفع الـ Avatar (متاح لجميع الأدوار الآن)
-        if (req.files?.avatar?.[0]) {
+        // 6. معالجة رفع الـ Avatar
+        if (req.files && req.files.avatar) {
             try {
                 userData.avatar = await uploadToImgBB(req.files.avatar[0].buffer);
             } catch (e) {
-                console.log("Avatar upload error ignored");
+                console.log("Avatar upload failed, continuing without it.");
             }
         }
 
-        // 6. معالجة بيانات السائق الخاصة
+        // 7. معالجة بيانات السائق الخاصة
         if (role === 'Driver') {
             // رفع الرخصة
-            if (req.files?.licenseImage?.[0]) {
+            if (req.files && req.files.licenseImage) {
                 try {
                     userData.licenseImage = await uploadToImgBB(req.files.licenseImage[0].buffer);
                 } catch (e) {
-                    console.log("License upload error ignored");
+                    console.log("License upload failed.");
                 }
             }
 
-            // معالجة المواعيد (Availability)
+            // معالجة المواعيد
             if (availability) {
                 try {
                     userData.availability = typeof availability === 'string' 
                         ? JSON.parse(availability) 
                         : availability;
                 } catch (e) {
-                    console.log("Invalid availability format");
+                    console.log("Invalid availability format ignored.");
                 }
             }
         }
 
-        // 7. إنشاء المستخدم في قاعدة البيانات
+        // 8. إنشاء المستخدم في قاعدة البيانات
         const newUser = await User.create(userData);
 
         res.status(201).json({
@@ -130,10 +133,16 @@ router.post('/register', uploadFields, async (req, res) => {
         });
 
     } catch (error) {
-        console.error("Register Error:", error);
+        console.error("DETAILED REGISTER ERROR:", error);
+        
+        // التقاط أخطاء الـ Validation المحددة من Mongoose
+        const message = error.name === 'ValidationError' 
+            ? Object.values(error.errors).map(val => val.message).join(', ')
+            : "Server error occurred during registration";
+
         res.status(500).json({
             success: false,
-            message: "Server error occurred",
+            message: message,
             error: error.message
         });
     }
@@ -174,7 +183,7 @@ router.post('/login', async (req, res) => {
         console.error("Login Error:", err);
         res.status(500).json({
             success: false,
-            message: "Server error"
+            message: "Server error during login"
         });
     }
 });
