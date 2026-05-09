@@ -400,22 +400,25 @@ router.patch('/:id/claim', async (req, res) => {
 });
 
 // ✅ مسار الموافقة
+// ✅ مسار موافقة المتبرع المحدث
 router.patch('/:id/approve-claim', async (req, res) => {
     try {
         const donation = await Donation.findByIdAndUpdate(
             req.params.id,
-            { status: 'Accepted' },
+            { 
+                status: 'Accepted', // تصبح متاحة في سوق السائقين
+                driver: null        // التأكد أنها بدون سائق لكي تظهر للجميع
+            },
             { new: true }
         ).populate('receiver');
 
-        // 🔔 إرسال إشعار للجمعية بالموافقة
-        const receiver = donation.receiver;
-        if (receiver && receiver.fcmToken) {
-            sendNotification(receiver.fcmToken, "تمت الموافقة! 🎉", "وافق المتبرع على طلب استلام الطعام، يمكنك الآن تعيين سائق.");
-        }
+        // إشعار عام للسائقين القريبين (اختياري عبر Socket.io أو FCM)
+        // broadcastToDrivers("هناك طعام جاهز للاستلام بالقرب منك!");
 
-        res.status(200).json({ success: true, message: 'تمت الموافقة على الطلب' });
-    } catch (error) { /* error handling */ }
+        res.status(200).json({ success: true, message: 'تمت الموافقة، المهمة الآن معروضة للسائقين في السوق.' });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
 });
 
 // ❌ مسار الرفض
@@ -448,6 +451,55 @@ router.patch('/:id/update-location', async (req, res) => {
             { new: true }
         );
         res.status(200).json({ success: true, location: donation.driverLocation });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// 🚚 جلب المهام المتاحة في السوق (التي وافق عليها المتبرع ولم يحجزها سائق بعد)
+router.get('/driver/available-tasks', async (req, res) => {
+    try {
+        // نبحث عن الطلبات التي حالتها Accepted (تمت موافقة المتبرع) 
+        // وبشرط أن يكون حقل السائق فارغاً
+        const tasks = await Donation.find({ 
+            status: 'Accepted', 
+            driver: null 
+        })
+        .populate('donor', 'username phone location avatar')
+        .populate('receiver', 'username phone address')
+        .sort({ updatedAt: -1 });
+
+        res.status(200).json({ success: true, tasks });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ⚡ ميزة الاقتناص: السائق يحجز المهمة لنفسه فوراً
+router.patch('/:id/driver-claim', async (req, res) => {
+    try {
+        const { driverId } = req.body;
+        const donation = await Donation.findById(req.params.id);
+
+        if (!donation) return res.status(404).json({ success: false, message: 'المهمة غير موجودة' });
+
+        // التأكد أن المهمة لم يحجزها سائق آخر في نفس اللحظة
+        if (donation.driver) {
+            return res.status(400).json({ success: false, message: 'عذراً، قام سائق آخر باقتناص هذه المهمة للتو!' });
+        }
+
+        donation.driver = driverId;
+        donation.status = 'Assigned'; // تحويل الحالة لـ "تم التعيين"
+        donation.driverRequestStatus = 'Accepted'; // السائق وافق تلقائياً لأنه هو من ضغط
+        donation.timeline.assignedAt = Date.now();
+
+        await donation.save();
+
+        res.status(200).json({ 
+            success: true, 
+            message: 'مبروك! المهمة أصبحت ملكك الآن، توجه لنقطة الاستلام.', 
+            donation 
+        });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
