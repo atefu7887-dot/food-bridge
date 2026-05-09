@@ -461,4 +461,42 @@ router.patch('/:id/update-location', async (req, res) => {
     }
 });
 
+// جلب المهام التي وافق عليها المتبرع والجمعية وجاهزة للاستلام
+router.get('/driver/available-tasks', async (req, res) => {
+    try {
+        // نبحث عن المهام التي وافق عليها المتبرع (Accepted) ولم يستلمها سائق بعد
+        const tasks = await Donation.find({ 
+            status: 'Accepted', 
+            driver: null 
+        }).populate('donor receiver');
+        
+        res.status(200).json({ success: true, tasks });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+router.patch('/:id/driver-claim', async (req, res) => {
+    try {
+        const { driverId } = req.body;
+        const donation = await Donation.findById(req.params.id);
+
+        if (!donation || donation.driver) {
+            return res.status(400).json({ success: false, message: 'عذراً، المهمة لم تعد متاحة' });
+        }
+
+        // تحديث البيانات لربط السائق وتغيير الحالة لبدء الرحلة
+        donation.driver = driverId;
+        donation.status = 'Assigned'; 
+        donation.driverRequestStatus = 'Accepted'; // السائق وافق فوراً لأنه هو من اختار
+        donation.timeline.assignedAt = Date.now();
+        
+        await donation.save();
+
+        res.status(200).json({ success: true, message: 'تم حجز المهمة لك بنجاح', donation });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 module.exports = router;
