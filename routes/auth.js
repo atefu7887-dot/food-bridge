@@ -7,13 +7,13 @@ const User = require('../models/User');
 
 const router = express.Router();
 
-// إعداد multer لتخزين الصور في الذاكرة مؤقتاً
+// 1. إعداد multer لتخزين الصور في الذاكرة (Memory Storage)
 const upload = multer({
     storage: multer.memoryStorage(),
-    limits: { fileSize: 5 * 1024 * 1024 } // الحد الأقصى 5 ميجا
+    limits: { fileSize: 5 * 1024 * 1024 } // الحد الأقصى 5 ميجا بايت للملف
 });
 
-// تعريف الحقول المسموح برفعها
+// تعريف الحقول المسموح برفعها من الموبايل
 const uploadFields = upload.fields([
     { name: 'avatar', maxCount: 1 },
     { name: 'licenseImage', maxCount: 1 }
@@ -39,98 +39,103 @@ async function uploadToImgBB(buffer) {
 }
 
 //////////////////////////////////////////////////
-// 📝 REGISTER
+// 📝 REGISTER ROUTE
 //////////////////////////////////////////////////
 router.post('/register', uploadFields, async (req, res) => {
     try {
-        const { username, email, phone, password, role, address, availability } = req.body;
+        const {
+            username, email, phone, password, role,
+            businessName, address, availability
+        } = req.body;
 
-        // توحيد الـ Role ليتوافق مع الـ Enum
-        const roleMap = { 'driver': 'Driver', 'donor': 'Donor', 'receiver': 'Receiver' };
-        const finalRole = roleMap[role?.toLowerCase()] || role;
+        // --- أ: التحقق من الحقول المطلوبة (Validation) ---
+        if (!username || !email || !phone || !password || !role) {
+            return res.status(400).json({
+                success: false,
+                message: 'الرجاء ملء جميع الحقول المطلوبة (الاسم، البريد، الهاتف، كلمة المرور، الدور)'
+            });
+        }
 
+        // --- ب: التحقق من عدم تكرار البريد الإلكتروني ---
+        const existingUser = await User.findOne({ email: email.toLowerCase() });
+        if (existingUser) {
+            return res.status(400).json({
+                success: false,
+                message: 'هذا البريد الإلكتروني مسجل بالفعل'
+            });
+        }
+
+        // --- ج: تشفير كلمة المرور ---
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        // إنشاء كائن بيانات المستخدم
+        // --- د: توحيد حالة أحرف الدور (Enum Handling) ---
+        const roleMap = { 'driver': 'Driver', 'donor': 'Donor', 'receiver': 'Receiver' };
+        const finalRole = roleMap[role.toLowerCase()] || role;
+
+        // تجهيز كائن بيانات المستخدم
         let userData = {
-            username,
-            email,
-            phone,
+            username: username.trim(),
+            email: email.toLowerCase().trim(),
+            phone: phone.trim(),
             password: hashedPassword,
             role: finalRole,
             address: address || "",
+            avatar: "", // قيمة افتراضية
         };
 
-        // معالجة الصور بشكل منفصل وآمن
+        // --- هـ: معالجة الصور (بشكل آمن) ---
         if (req.files) {
-            if (req.files.avatar) {
+            if (req.files.avatar && req.files.avatar[0]) {
                 userData.avatar = await uploadToImgBB(req.files.avatar[0].buffer).catch(() => "");
             }
-            if (req.files.licenseImage) {
+            if (req.files.licenseImage && req.files.licenseImage[0]) {
                 userData.licenseImage = await uploadToImgBB(req.files.licenseImage[0].buffer).catch(() => "");
             }
         }
 
-        // معالجة المواعيد للسائق (هام جداً)
+        // --- و: منطق الأدوار المخصص ---
         if (finalRole === 'Driver') {
-            userData.businessName = undefined; // إزالة الحقل تماماً للسائق
+            userData.businessName = undefined; // السائق لا يملك نشاطاً تجارياً
+            
+            // معالجة المواعيد (Availability)
             if (availability) {
                 try {
-                    // السيرفر يحاول فك التشفير سواء كان نصاً أو كائناً
                     userData.availability = typeof availability === 'string' 
                         ? JSON.parse(availability) 
                         : availability;
-                } catch (e) { console.log("Availability parse error"); }
+                } catch (e) {
+                    console.error("خطأ في تنسيق بيانات المواعيد");
+                }
             }
         } else {
-            userData.businessName = req.body.businessName || username;
+            // للمتبرع والمستلم: نضمن وجود اسم النشاط التجاري
+            userData.businessName = businessName || username;
         }
 
+        // --- ز: إنشاء المستخدم في قاعدة البيانات ---
         const newUser = await User.create(userData);
-        res.status(201).json({ success: true, user: newUser });
 
-    } catch (error) {
-        console.error("FULL ERROR LOG:", error);
-        res.status(500).json({ success: false, message: error.message });
-    }
-});
-
-//////////////////////////////////////////////////
-// 🔐 LOGIN
-//////////////////////////////////////////////////
-router.post('/login', async (req, res) => {
-    const { email, password } = req.body;
-
-    try {
-        const user = await User.findOne({ email });
-
-        if (!user) {
-            return res.status(400).json({
-                success: false,
-                message: "Email not registered"
-            });
-        }
-
-        const isMatch = await bcrypt.compare(password, user.password);
-
-        if (!isMatch) {
-            return res.status(400).json({
-                success: false,
-                message: "Incorrect password"
-            });
-        }
-
-        res.status(200).json({
+        res.status(201).json({
             success: true,
-            message: "Login successful ✅",
-            user: user
+            message: "تم إنشاء الحساب بنجاح 🎉",
+            user: newUser
         });
 
-    } catch (err) {
-        console.error("Login Error:", err);
+    } catch (error) {
+        console.error("REGISTER ERROR:", error);
+        
+        // التعامل مع أخطاء MongoDB الخاصة بالتكرار
+        if (error.code === 11000) {
+            return res.status(400).json({
+                success: false,
+                message: "البريد الإلكتروني موجود مسبقاً"
+            });
+        }
+
         res.status(500).json({
             success: false,
-            message: "Server error during login"
+            message: "حدث خطأ داخلي في الخادم",
+            error: error.message
         });
     }
 });
