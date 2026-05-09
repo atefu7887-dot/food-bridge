@@ -60,13 +60,11 @@ router.post('/register', uploadFields, async (req, res) => {
 
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        // 2. توحيد حالة أحرف الـ Role لتطابق الـ Enum في الموديل
-        const roleLower = role.toLowerCase();
-        let finalRole = role;
-        if (roleLower === 'donor') finalRole = 'Donor';
-        if (roleLower === 'receiver') finalRole = 'Receiver';
-        if (roleLower === 'driver') finalRole = 'Driver';
+        // 2. توحيد حالة أحرف الـ Role (لضمان مطابقة الـ Enum في User.js)
+        const roleMap = { 'donor': 'Donor', 'receiver': 'Receiver', 'driver': 'Driver' };
+        const finalRole = roleMap[role.toLowerCase()] || role;
 
+        // 3. تجهيز كائن البيانات الأساسي
         let userData = {
             username,
             email,
@@ -74,30 +72,49 @@ router.post('/register', uploadFields, async (req, res) => {
             password: hashedPassword,
             role: finalRole,
             address: address || "",
-            avatar: '', 
+            avatar: "", // قيمة افتراضية
         };
 
-        // 3. معالجة البيانات بناءً على الدور الموحد
+        // 4. منطق الأدوار المخصص (Donor / Receiver)
         if (finalRole === 'Donor' || finalRole === 'Receiver') {
-            // نضمن أن businessName لا يصل أبداً كـ null لقاعدة البيانات
             userData.businessName = businessName || username;
-            
-            if (finalRole === 'Donor') userData.donorType = 'Donor';
-            if (finalRole === 'Receiver') userData.receiverType = 'Receiver';
-        } else {
-            userData.businessName = undefined; // للسائق نلغي الحقل تماماً
         }
 
-        // 4. رفع الصور (مع إضافة try-catch لكل صورة لضمان عدم توقف التسجيل)
-        if (req.files?.avatar?.[0]) {
-            try { userData.avatar = await uploadToImgBB(req.files.avatar[0].buffer); } catch (e) {}
-        }
-        
-        if (finalRole === 'Driver' && req.files?.licenseImage?.[0]) {
-            try { userData.licenseImage = await uploadToImgBB(req.files.licenseImage[0].buffer); } catch (e) {}
+        // 5. رفع الصور (Avatar متاح للجميع)
+        if (req.files && req.files.avatar) {
+            try {
+                userData.avatar = await uploadToImgBB(req.files.avatar[0].buffer);
+            } catch (e) { console.error("Avatar upload failed"); }
         }
 
-        // 5. إنشاء المستخدم
+        // 6. منطق السائق الخاص (الرخصة والمواعيد) - الجزء الذي كان ناقصاً
+        if (finalRole === 'Driver') {
+            userData.businessName = undefined; // السائق لا يملك اسم تجاري في الموديل الخاص بك
+
+            // رفع الرخصة
+            if (req.files && req.files.licenseImage) {
+                try {
+                    userData.licenseImage = await uploadToImgBB(req.files.licenseImage[0].buffer);
+                } catch (e) { console.error("License upload failed"); }
+            }
+
+            // معالجة المواعيد (تأكد من إضافتها لـ userData)
+            if (availability) {
+                try {
+                    const parsedAvail = typeof availability === 'string' ? JSON.parse(availability) : availability;
+                    userData.availability = {
+                        timeSlot: parsedAvail.timeSlot || "",
+                        customTime: parsedAvail.customTime || "",
+                        days: parsedAvail.days || [],
+                        frequency: parsedAvail.frequency || "Any Day"
+                    };
+                } catch (e) {
+                    console.error("Availability parse error");
+                }
+            }
+        }
+
+        // 7. إنشاء المستخدم (استخدام userData المكتملة)
         const newUser = await User.create(userData);
 
         res.status(201).json({
@@ -107,7 +124,7 @@ router.post('/register', uploadFields, async (req, res) => {
         });
 
     } catch (error) {
-        console.error("REGISTER ERROR:", error);
+        console.error("REGISTER ERROR DETAILS:", error);
         res.status(500).json({
             success: false,
             message: error.name === 'ValidationError' ? "بيانات غير صالحة: " + error.message : "Internal Server Error",
