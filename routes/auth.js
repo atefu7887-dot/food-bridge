@@ -43,28 +43,15 @@ async function uploadToImgBB(buffer) {
 //////////////////////////////////////////////////
 router.post('/register', uploadFields, async (req, res) => {
     try {
-        const {
-            username, email, phone, password, role,
-            businessName, address, availability
-        } = req.body;
+        const { username, email, phone, password, role, address, availability } = req.body;
 
-        // 1. التحقق من الحقول الأساسية
-        if (!username || !email || !phone || !password || !role) {
-            return res.status(400).json({ success: false, message: 'All required fields must be filled' });
-        }
-
-        const existingUser = await User.findOne({ email });
-        if (existingUser) {
-            return res.status(400).json({ success: false, message: 'Email already exists' });
-        }
+        // توحيد الـ Role ليتوافق مع الـ Enum
+        const roleMap = { 'driver': 'Driver', 'donor': 'Donor', 'receiver': 'Receiver' };
+        const finalRole = roleMap[role?.toLowerCase()] || role;
 
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        // 2. توحيد حالة أحرف الـ Role (لضمان مطابقة الـ Enum في User.js)
-        const roleMap = { 'donor': 'Donor', 'receiver': 'Receiver', 'driver': 'Driver' };
-        const finalRole = roleMap[role.toLowerCase()] || role;
-
-        // 3. تجهيز كائن البيانات الأساسي
+        // إنشاء كائن بيانات المستخدم
         let userData = {
             username,
             email,
@@ -72,63 +59,39 @@ router.post('/register', uploadFields, async (req, res) => {
             password: hashedPassword,
             role: finalRole,
             address: address || "",
-            avatar: "", // قيمة افتراضية
         };
 
-        // 4. منطق الأدوار المخصص (Donor / Receiver)
-        if (finalRole === 'Donor' || finalRole === 'Receiver') {
-            userData.businessName = businessName || username;
-        }
-
-        // 5. رفع الصور (Avatar متاح للجميع)
-        if (req.files && req.files.avatar) {
-            try {
-                userData.avatar = await uploadToImgBB(req.files.avatar[0].buffer);
-            } catch (e) { console.error("Avatar upload failed"); }
-        }
-
-        // 6. منطق السائق الخاص (الرخصة والمواعيد) - الجزء الذي كان ناقصاً
-        if (finalRole === 'Driver') {
-            userData.businessName = undefined; // السائق لا يملك اسم تجاري في الموديل الخاص بك
-
-            // رفع الرخصة
-            if (req.files && req.files.licenseImage) {
-                try {
-                    userData.licenseImage = await uploadToImgBB(req.files.licenseImage[0].buffer);
-                } catch (e) { console.error("License upload failed"); }
+        // معالجة الصور بشكل منفصل وآمن
+        if (req.files) {
+            if (req.files.avatar) {
+                userData.avatar = await uploadToImgBB(req.files.avatar[0].buffer).catch(() => "");
             }
+            if (req.files.licenseImage) {
+                userData.licenseImage = await uploadToImgBB(req.files.licenseImage[0].buffer).catch(() => "");
+            }
+        }
 
-            // معالجة المواعيد (تأكد من إضافتها لـ userData)
+        // معالجة المواعيد للسائق (هام جداً)
+        if (finalRole === 'Driver') {
+            userData.businessName = undefined; // إزالة الحقل تماماً للسائق
             if (availability) {
                 try {
-                    const parsedAvail = typeof availability === 'string' ? JSON.parse(availability) : availability;
-                    userData.availability = {
-                        timeSlot: parsedAvail.timeSlot || "",
-                        customTime: parsedAvail.customTime || "",
-                        days: parsedAvail.days || [],
-                        frequency: parsedAvail.frequency || "Any Day"
-                    };
-                } catch (e) {
-                    console.error("Availability parse error");
-                }
+                    // السيرفر يحاول فك التشفير سواء كان نصاً أو كائناً
+                    userData.availability = typeof availability === 'string' 
+                        ? JSON.parse(availability) 
+                        : availability;
+                } catch (e) { console.log("Availability parse error"); }
             }
+        } else {
+            userData.businessName = req.body.businessName || username;
         }
 
-        // 7. إنشاء المستخدم (استخدام userData المكتملة)
         const newUser = await User.create(userData);
-
-        res.status(201).json({
-            success: true,
-            message: "Account Created Successfully 🎉",
-            user: newUser
-        });
+        res.status(201).json({ success: true, user: newUser });
 
     } catch (error) {
-        console.error("REGISTER ERROR DETAILS:", error);
-        res.status(500).json({
-            success: false,
-            message: error.name === 'ValidationError' ? "بيانات غير صالحة: " + error.message : "Internal Server Error",
-        });
+        console.error("FULL ERROR LOG:", error);
+        res.status(500).json({ success: false, message: error.message });
     }
 });
 
