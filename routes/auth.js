@@ -48,82 +48,56 @@ router.post('/register', uploadFields, async (req, res) => {
             businessName, address, availability
         } = req.body;
 
-        // 1. التحقق من الحقول المطلوبة
+        // 1. التحقق من الحقول الأساسية
         if (!username || !email || !phone || !password || !role) {
-            return res.status(400).json({
-                success: false,
-                message: 'All required fields must be filled'
-            });
+            return res.status(400).json({ success: false, message: 'All required fields must be filled' });
         }
 
-        // 2. التحقق من وجود البريد الإلكتروني مسبقاً
         const existingUser = await User.findOne({ email });
         if (existingUser) {
-            return res.status(400).json({
-                success: false,
-                message: 'Email already exists'
-            });
+            return res.status(400).json({ success: false, message: 'Email already exists' });
         }
 
-        // 3. تشفير كلمة المرور
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        // 4. تجهيز بيانات المستخدم الأساسية
+        // 2. توحيد حالة أحرف الـ Role لتطابق الـ Enum في الموديل
+        const roleLower = role.toLowerCase();
+        let finalRole = role;
+        if (roleLower === 'donor') finalRole = 'Donor';
+        if (roleLower === 'receiver') finalRole = 'Receiver';
+        if (roleLower === 'driver') finalRole = 'Driver';
+
         let userData = {
             username,
             email,
             phone,
             password: hashedPassword,
-            role,
+            role: finalRole,
             address: address || "",
             avatar: '', 
         };
 
-        // 5. منطق توزيع البيانات بناءً على الدور (الحل لمشكلة Donor/Receiver)
-        if (role === 'Donor' || role === 'Receiver') {
-            // نستخدم الاسم التجاري المرسل، وإذا لم يوجد نستخدم username كبديل لضمان عدم فشل الـ Validation
+        // 3. معالجة البيانات بناءً على الدور الموحد
+        if (finalRole === 'Donor' || finalRole === 'Receiver') {
+            // نضمن أن businessName لا يصل أبداً كـ null لقاعدة البيانات
             userData.businessName = businessName || username;
             
-            if (role === 'Donor') userData.donorType = 'Donor';
-            if (role === 'Receiver') userData.receiverType = 'Receiver';
-        } else if (role === 'Driver') {
-            // للسائق نضمن عدم إرسال businessName نهائياً لتجنب تعارض الـ Validator
-            userData.businessName = undefined; 
+            if (finalRole === 'Donor') userData.donorType = 'Donor';
+            if (finalRole === 'Receiver') userData.receiverType = 'Receiver';
+        } else {
+            userData.businessName = undefined; // للسائق نلغي الحقل تماماً
         }
 
-        // 6. معالجة رفع الـ Avatar
-        if (req.files && req.files.avatar) {
-            try {
-                userData.avatar = await uploadToImgBB(req.files.avatar[0].buffer);
-            } catch (e) {
-                console.log("Avatar upload failed, continuing without it.");
-            }
+        // 4. رفع الصور (مع إضافة try-catch لكل صورة لضمان عدم توقف التسجيل)
+        if (req.files?.avatar?.[0]) {
+            try { userData.avatar = await uploadToImgBB(req.files.avatar[0].buffer); } catch (e) {}
+        }
+        
+        if (finalRole === 'Driver' && req.files?.licenseImage?.[0]) {
+            try { userData.licenseImage = await uploadToImgBB(req.files.licenseImage[0].buffer); } catch (e) {}
         }
 
-        // 7. معالجة بيانات السائق الخاصة
-        if (role === 'Driver') {
-            // رفع الرخصة
-            if (req.files && req.files.licenseImage) {
-                try {
-                    userData.licenseImage = await uploadToImgBB(req.files.licenseImage[0].buffer);
-                } catch (e) {
-                    console.log("License upload failed.");
-                }
-            }
-
-            // معالجة المواعيد
-            if (availability) {
-                try {
-                    userData.availability = typeof availability === 'string' 
-                        ? JSON.parse(availability) 
-                        : availability;
-                } catch (e) {
-                    console.log("Invalid availability format ignored.");
-                }
-            }
-        }
-
-        // 8. إنشاء المستخدم في قاعدة البيانات
+        // 5. إنشاء المستخدم
         const newUser = await User.create(userData);
 
         res.status(201).json({
@@ -133,17 +107,10 @@ router.post('/register', uploadFields, async (req, res) => {
         });
 
     } catch (error) {
-        console.error("DETAILED REGISTER ERROR:", error);
-        
-        // التقاط أخطاء الـ Validation المحددة من Mongoose
-        const message = error.name === 'ValidationError' 
-            ? Object.values(error.errors).map(val => val.message).join(', ')
-            : "Server error occurred during registration";
-
+        console.error("REGISTER ERROR:", error);
         res.status(500).json({
             success: false,
-            message: message,
-            error: error.message
+            message: error.name === 'ValidationError' ? "بيانات غير صالحة: " + error.message : "Internal Server Error",
         });
     }
 });
