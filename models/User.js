@@ -1,84 +1,36 @@
 const mongoose = require('mongoose');
 
 const userSchema = new mongoose.Schema({
-    username: {
-        type: String,
-        required: true,
+    username: { type: String, required: true },
+    email: { type: String, required: true, unique: true, lowercase: true },
+    phone: { type: String, required: true },
+    password: { type: String, required: true },
+    role: { 
+        type: String, 
+        enum: ['Donor', 'Receiver', 'Driver'], // تأكد أن الحرف الأول كبير
+        required: true 
     },
-    email: {
-        type: String,
-        required: true,
-        unique: true,
-        lowercase: true,
-    },
-    phone: {
-        type: String,
-        required: true,
-    },
-    password: {
-        type: String,
-        required: true,
-    },
-    role: {
-        type: String,
-        enum: ['Donor', 'Receiver', 'Driver'],
-        required: true,
-    },
-    // بيتم تخزين النوع تلقائياً بناءً على الـ role في الـ Logic
-    donorType: {
-        type: String,
-        default: "",
-    },
-    receiverType: {
-        type: String,
-        default: "",
-    },
-   businessName: {
-    type: String,
-    default: "", // يسمح بترك الحقل فارغاً ولا يسبب Server Error
-},
-    address: {
-        type: String,
-    },
-    // الصورة الموحدة (شخصية أو لوجو)
-    avatar: {
-        type: String,
-        default: '',
-    },
-    isVerified: {
-        type: Boolean,
-        default: false,
-    },
-    resetPasswordOtp: { type: String },
-    resetPasswordExpire: { type: Date },
-
-    // بيانات خاصة بالسائق فقط
-    licenseImage: {
-        type: String,
-        default: '',
-    },
+    // جعلنا هذه الحقول مرنة جداً لتجنب الـ Server Error
+    donorType: { type: String, default: "" },
+    receiverType: { type: String, default: "" },
+    businessName: { type: String, default: "" }, // حذفنا الـ Validator الصعب هنا
+    address: { type: String, default: "" },
+    avatar: { type: String, default: "" },
+    licenseImage: { type: String, default: "" },
+    isVerified: { type: Boolean, default: false },
     availability: {
-        timeSlot: { type: String },
-        customTime: { type: String, default: "" },
-        days: { type: [String] },
-        frequency: {
-            type: String,
-            enum: ['All Weekdays', 'All Weekend', 'Any Day'],
-        },
-    },
+        timeSlot: String,
+        customTime: String,
+        days: [String],
+        frequency: String
+    }
 }, { timestamps: true });
 
-// Middleware (Pre-save) لضمان التلقائية في قاعدة البيانات
+// هذا الجزء يضمن ملء البيانات تلقائياً قبل الحفظ
 userSchema.pre('save', function (next) {
-    if (this.role === 'Donor') {
-        this.donorType = 'Donor';
-        this.receiverType = ""; // تنظيف الحقل الآخر
-    } else if (this.role === 'Receiver') {
-        this.receiverType = 'Receiver';
-        this.donorType = ""; // تنظيف الحقل الآخر
-    }
+    if (this.role === 'Donor') this.donorType = 'Donor';
+    if (this.role === 'Receiver') this.receiverType = 'Receiver';
     next();
 });
 
-const User = mongoose.model('User', userSchema);
-module.exports = User;
+module.exports = mongoose.model('User', userSchema);
