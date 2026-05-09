@@ -505,4 +505,34 @@ router.patch('/:id/driver-claim', async (req, res) => {
     }
 });
 
+// ⚡ ميزة "الاقتناص الحر" للسائق
+router.patch('/:id/driver-pickup-anyway', async (req, res) => {
+    try {
+        const { driverId } = req.body;
+        const donation = await Donation.findById(req.params.id);
+
+        if (!donation || donation.status !== 'Pending') {
+            return res.status(400).json({ success: false, message: 'التبرع محجوز أو غير متاح' });
+        }
+
+        // السائق بيحجز الطلب لنفسه قبل ما أي جمعية تدخل
+        donation.driver = driverId;
+        donation.status = 'Picked Up'; // هنعتبره استلم فعلياً أو في طريقه للاستلام
+        donation.timeline.pickedUpAt = Date.now();
+        
+        await donation.save();
+
+        // 💡 ترشيح أقرب جمعية للسائق عشان يوديلها الأكل
+        const nearestNGO = await User.findOne({ role: 'Receiver' }); // ممكن تحسنها بـ Location
+
+        res.status(200).json({ 
+            success: true, 
+            message: 'تم حجز التبرع، يرجى التوجه للاستلام وتوصيله لأقرب جمعية',
+            suggestedNGO: nearestNGO 
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 module.exports = router;
