@@ -116,13 +116,22 @@ router.patch('/:id/assign-driver', async (req, res) => {
 // 4. ✅ قبول السائق للمهمة
 router.patch('/:id/driver-accept', async (req, res) => {
     try {
-        const donation = await Donation.findById(req.params.id);
+        // نقوم بعمل populate للـ receiver لجلب بياناته (مثل fcmToken)
+        const donation = await Donation.findById(req.params.id).populate('receiver');
         
         if (!donation) return res.status(404).json({ success: false, message: 'الطلب غير موجود' });
 
-        // نغير الحالة من Assigned إلى Accepted (وهي تعني أن السائق وافق وبدأ التحرك)
         donation.status = 'Accepted';
         await donation.save();
+
+        // 🔔 إرسال إشعار للجمعية (الـ Receiver)
+        if (donation.receiver && donation.receiver.fcmToken) {
+            sendNotification(
+                donation.receiver.fcmToken,
+                "تم قبول طلب التوصيل 🚚",
+                `السائق وافق على استلام طلبك (${donation.title}) وهو في الطريق الآن.`
+            );
+        }
 
         res.status(200).json({ 
             success: true, 
@@ -137,16 +146,22 @@ router.patch('/:id/driver-accept', async (req, res) => {
 // 5. ❌ رفض السائق للمهمة
 router.patch('/:id/driver-reject', async (req, res) => {
     try {
-        const donation = await Donation.findById(req.params.id);
+        const donation = await Donation.findById(req.params.id).populate('receiver');
 
         if (!donation) return res.status(404).json({ success: false, message: 'الطلب غير موجود' });
 
-        // عند الرفض: نقوم بمسح السائق وإعادة الحالة لـ Accepted (لأن المتبرع وافق أصلاً) 
-        // أو Pending لكي تختار الجمعية سائقاً آخر
         donation.driver = null; 
-        donation.status = 'Accepted'; // الطلب يعود متاحاً للتعيين مرة أخرى
-        
+        donation.status = 'Accepted'; // يعود متاحاً في السوق
         await donation.save();
+
+        // 🔔 إرسال إشعار للجمعية (الـ Receiver)
+        if (donation.receiver && donation.receiver.fcmToken) {
+            sendNotification(
+                donation.receiver.fcmToken,
+                "نعتذر، السائق رفض المهمة ⚠️",
+                `اعتذر السائق عن توصيل طلب (${donation.title}). الطلب متاح الآن لتعيين سائق آخر.`
+            );
+        }
 
         res.status(200).json({ 
             success: true, 
