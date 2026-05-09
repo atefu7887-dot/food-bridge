@@ -89,6 +89,7 @@ router.get('/available-drivers', async (req, res) => {
     }
 });
 
+// 3. 🎯 تعيين سائق للمهمة (من قبل الجمعية)
 router.patch('/:id/assign-driver', async (req, res) => {
     try {
         const { driverId } = req.body;
@@ -96,14 +97,16 @@ router.patch('/:id/assign-driver', async (req, res) => {
 
         if (!donation) return res.status(404).json({ success: false, message: 'Donation not found' });
         
-        // منع التعيين قبل موافقة المتبرع (Pending Approval)
         if (donation.status === 'Pending Approval') {
             return res.status(400).json({ success: false, message: 'انتظر موافقة المتبرع أولاً' });
         }
 
         donation.driver = driverId;
-        donation.status = 'Assigned'; // الحالة الآن "تم التعيين" وفي انتظار رد السائق
+        donation.status = 'Assigned'; 
+        // ✨ تحديث حالة طلب السائق إلى "قيد الانتظار"
+        donation.driverRequestStatus = 'Pending'; 
         donation.timeline.assignedAt = Date.now(); 
+        
         await donation.save();
 
         const populated = await Donation.findById(donation._id).populate('driver', 'username phone avatar');
@@ -120,14 +123,16 @@ router.patch('/:id/driver-accept', async (req, res) => {
         
         if (!donation) return res.status(404).json({ success: false, message: 'الطلب غير موجود' });
 
-        // نغير الحالة من Assigned إلى Accepted (وهي تعني أن السائق وافق وبدأ التحرك)
-        donation.status = 'Accepted';
+        // ✨ تحديث الحالة الكلية وحالة طلب السائق
+        donation.status = 'Accepted'; 
+        donation.driverRequestStatus = 'Accepted'; 
+        
         await donation.save();
 
         res.status(200).json({ 
             success: true, 
             message: 'تم قبول المهمة بنجاح، يمكنك البدء في الاستلام الآن.',
-            donation 
+            driverRequestStatus: 'Accepted'
         });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
@@ -141,16 +146,19 @@ router.patch('/:id/driver-reject', async (req, res) => {
 
         if (!donation) return res.status(404).json({ success: false, message: 'الطلب غير موجود' });
 
-        // عند الرفض: نقوم بمسح السائق وإعادة الحالة لـ Accepted (لأن المتبرع وافق أصلاً) 
-        // أو Pending لكي تختار الجمعية سائقاً آخر
+        // ✨ تسجيل الرفض ومسح السائق لإتاحة الطلب لسائق آخر
         donation.driver = null; 
-        donation.status = 'Accepted'; // الطلب يعود متاحاً للتعيين مرة أخرى
+        donation.driverRequestStatus = 'Rejected'; 
+        
+        // نعيد الحالة لـ Accepted لكي تظهر في قائمة المهام التي تحتاج سائق لدى الجمعية
+        donation.status = 'Accepted'; 
         
         await donation.save();
 
         res.status(200).json({ 
             success: true, 
-            message: 'تم رفض المهمة، وإعادة الطلب لقائمة الانتظار.' 
+            message: 'تم رفض المهمة، وإعادة الطلب لقائمة الانتظار للجمعية.',
+            driverRequestStatus: 'Rejected'
         });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
