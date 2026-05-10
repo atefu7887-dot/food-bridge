@@ -13,10 +13,11 @@ router.post('/access', async (req, res) => {
   try {
     let { donationId, senderId, receiverId } = req.body;
 
+    // التحقق من وجود الحقول المطلوبة
     if (!donationId || !senderId || !receiverId) {
       return res.status(400).json({
         success: false,
-        message: 'Missing required fields (donationId, senderId, receiverId)',
+        message: 'Missing required fields',
       });
     }
 
@@ -24,6 +25,7 @@ router.post('/access', async (req, res) => {
     senderId = senderId.toString().trim();
     receiverId = receiverId.toString().trim();
 
+    // التحقق من صحة الـ Object IDs لـ MongoDB
     if (
       !mongoose.Types.ObjectId.isValid(donationId) ||
       !mongoose.Types.ObjectId.isValid(senderId) ||
@@ -31,14 +33,23 @@ router.post('/access', async (req, res) => {
     ) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid Object ID(s) provided',
+        message: 'Invalid ids',
       });
     }
 
-    // ترتيب المعرفات أبجدياً لضمان البحث والإنشاء بنفس الترتيب دائماً
+    // التحقق من وجود التبرع
+    const donation = await Donation.findById(donationId);
+    if (!donation) {
+      return res.status(404).json({
+        success: false,
+        message: 'Donation not found',
+      });
+    }
+
+    // ترتيب أطراف المحادثة لضمان ربط دائم وتجنب تكرار المفاتيح الفريدة
     const participants = [senderId, receiverId].sort();
 
-    // البحث عن غرفة تجمع الطرفين المحددين بالذات بخصوص هذا التبرع (مثال: الجمعية + السائق)
+    // البحث عن غرفة محادثة قائمة تجمع هذين الطرفين بالذات بخصوص هذا التبرع
     let chat = await Chat.findOne({
       donation: donationId,
       participants: {
@@ -49,7 +60,7 @@ router.post('/access', async (req, res) => {
       .populate('participants', 'username phone avatar role')
       .populate('donation', 'title status');
 
-    // إذا لم تكن موجودة، نقوم بإنشائها فوراً
+    // إذا لم تكن الغرفة موجودة، نقوم بإنشائها
     if (!chat) {
       try {
         const createdChat = await Chat.create({
@@ -61,7 +72,7 @@ router.post('/access', async (req, res) => {
           .populate('participants', 'username phone avatar role')
           .populate('donation', 'title status');
       } catch (dbError) {
-        // إذا حدث تعارض متزامن بسبب الـ unique index، نقوم بجلب الغرفة القائمة فوراً
+        // إذا حدث خطأ تكرار (11000) بسبب تعارض متزامن، نقوم بجلب الغرفة الموجودة مسبقاً فوراً بدلاً من إرجاع رسالة فقط!
         if (dbError.code === 11000) {
           chat = await Chat.findOne({
             donation: donationId,
@@ -73,11 +84,12 @@ router.post('/access', async (req, res) => {
             .populate('participants', 'username phone avatar role')
             .populate('donation', 'title status');
         } else {
-          throw dbError;
+          throw dbError; // تمرير أي خطأ آخر للـ catch الرئيسي
         }
       }
     }
 
+    // الرد الناجح يحتوي دائماً على كائن الـ chat
     return res.status(200).json({
       success: true,
       chat,
@@ -85,10 +97,37 @@ router.post('/access', async (req, res) => {
 
   } catch (error) {
     console.log('ACCESS CHAT ERROR =>', error);
+
+    // معالجة إضافية احتياطية لخطأ التكرار في الـ catch الخارجي
+    if (error.code === 11000) {
+      try {
+        const { donationId, senderId, receiverId } = req.body;
+        const participants = [senderId.toString().trim(), receiverId.toString().trim()].sort();
+        
+        const existingChat = await Chat.findOne({
+          donation: donationId.toString().trim(),
+          participants: {
+            $all: participants,
+            $size: 2,
+          },
+        })
+          .populate('participants', 'username phone avatar role')
+          .populate('donation', 'title status');
+
+        if (existingChat) {
+          return res.status(200).json({
+            success: true,
+            chat: existingChat,
+          });
+        }
+      } catch (innerError) {
+        console.log('INNER CHAT FETCH ERROR =>', innerError);
+      }
+    }
+
     return res.status(500).json({
       success: false,
-      message: 'Server error processing chat access',
-      error: error.message,
+      message: error.message,
     });
   }
 });
