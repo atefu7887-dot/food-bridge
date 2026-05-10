@@ -8,6 +8,7 @@ const availabilitySchema = new mongoose.Schema({
 }, { _id: false });
 
 const userSchema = new mongoose.Schema({
+
     username: {
         type: String,
         required: true,
@@ -19,6 +20,7 @@ const userSchema = new mongoose.Schema({
         required: true,
         unique: true,
         lowercase: true,
+        trim: true
     },
 
     phone: {
@@ -26,6 +28,7 @@ const userSchema = new mongoose.Schema({
         required: true,
         trim: true
     },
+
     password: {
         type: String,
         required: true,
@@ -83,8 +86,9 @@ const userSchema = new mongoose.Schema({
 });
 
 
-// ✅ Middleware بدون next (حل المشكلة)
-userSchema.pre('save', function () {
+// Middleware
+userSchema.pre('save', function (next) {
+
     if (this.role === 'Donor') {
         this.donorType = 'Donor';
         this.receiverType = '';
@@ -96,20 +100,18 @@ userSchema.pre('save', function () {
     }
 
     if (this.role === 'Driver') {
-        this.businessName = "";
+        this.businessName = '';
     }
+
+    next();
 });
 
 
-// 🔐 حذف الباسورد من أي response
+// حذف الباسورد
 userSchema.methods.toJSON = function () {
     const obj = this.toObject();
     delete obj.password;
     return obj;
 };
-
-
-// ⚡ تحسين البحث
-userSchema.index({ email: 1 });
 
 module.exports = mongoose.model('User', userSchema);
