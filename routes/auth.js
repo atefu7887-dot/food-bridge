@@ -308,94 +308,102 @@ router.post(
 //////////////////////////////////////////////////
 
 router.post(
-    '/login',
-    async (req, res) => {
+  '/login',
+  async (req, res) => {
 
-        try {
+    try {
 
-            const {
-                email,
-                password
-            } = req.body;
+      const {
+        email,
+        password
+      } = req.body;
 
-            if (
-                !email ||
-                !password
-            ) {
+      //////////////////////////////////////////////////
+      // VALIDATION
+      //////////////////////////////////////////////////
 
-                return res.status(400).json({
-                    success: false,
-                    message:
-                        'Email and password required'
-                });
-            }
+      if (!email || !password) {
 
-            const user =
-                await User.findOne({
+        return res.status(400).json({
+          success: false,
+          message: 'Email and password required'
+        });
+      }
 
-                    email:
-                        email
-                            .toLowerCase()
-                            .trim()
+      //////////////////////////////////////////////////
+      // FIND USER
+      //////////////////////////////////////////////////
 
-                })
-                .select('+password')
-                .populate(
-                    'availability'
-                );
+      const user = await User.findOne({
+        email: email.toLowerCase().trim()
+      })
+      .select('+password')
+      .populate({
+        path: 'availability'
+      });
 
-            if (!user) {
+      //////////////////////////////////////////////////
+      // CHECK USER
+      //////////////////////////////////////////////////
 
-                return res.status(400).json({
-                    success: false,
-                    message:
-                        'Email not found'
-                });
-            }
+      if (!user) {
 
-            const isMatch =
-                await bcrypt.compare(
-                    password,
-                    user.password
-                );
+        return res.status(400).json({
+          success: false,
+          message: 'Email not found'
+        });
+      }
 
-            if (!isMatch) {
+      //////////////////////////////////////////////////
+      // CHECK PASSWORD
+      //////////////////////////////////////////////////
 
-                return res.status(400).json({
-                    success: false,
-                    message:
-                        'Wrong password'
-                });
-            }
+      const isMatch =
+        await bcrypt.compare(
+          password,
+          user.password
+        );
 
-            const userObj =
-                user.toObject();
+      if (!isMatch) {
 
-            delete userObj.password;
+        return res.status(400).json({
+          success: false,
+          message: 'Wrong password'
+        });
+      }
 
-            return res.status(200).json({
-                success: true,
-                message:
-                    'Login successful ✅',
-                user: userObj
-            });
+      //////////////////////////////////////////////////
+      // REMOVE PASSWORD
+      //////////////////////////////////////////////////
 
-        } catch (error) {
+      const userObj = user.toObject();
 
-            console.log(
-                "LOGIN ERROR:",
-                error
-            );
+      delete userObj.password;
 
-            return res.status(500).json({
-                success: false,
-                message:
-                    'Internal server error',
-                error:
-                    error.message
-            });
-        }
+      //////////////////////////////////////////////////
+      // RESPONSE
+      //////////////////////////////////////////////////
+
+      return res.status(200).json({
+        success: true,
+        message: 'Login successful ✅',
+        user: userObj
+      });
+
+    } catch (error) {
+
+      console.log(
+        "LOGIN ERROR:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message: 'Internal server error',
+        error: error.message
+      });
     }
+  }
 );
 
 //////////////////////////////////////////////////
