@@ -21,14 +21,14 @@ app.use('/auth', authRouter);
 app.use('/auth/forgot-password', forgotPasswordRouter);
 app.use('/api/donations', donationRoutes);
 
-// MongoDB
-mongoose.connect(process.env.MONGO_URI)
-.then(() => console.log('MongoDB Connected successfully...'))
-.catch(err => console.error('MongoDB connection error:', err));
-
-// Server
-const PORT = process.env.PORT || 3000;
-
-app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
+mongoose.connect(process.env.MONGO_URI, {
+    connectTimeoutMS: 10000, // وقت محدد للاتصال
+})
+.then(() => console.log('✅ MongoDB Connected successfully...'))
+.catch(err => {
+    console.error('❌ MongoDB Connection Error:', err.message);
+    process.exit(1); // إيقاف السيرفر فوراً إذا لم يتصل بالقاعدة
 });
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));

@@ -1,8 +1,7 @@
 const mongoose = require('mongoose');
-const Availability = require('./Availability');
 
-const userSchema = new mongoose.Schema({
-
+const userSchema = new mongoose.Schema(
+{
     username: {
         type: String,
         required: true,
@@ -81,23 +80,37 @@ const userSchema = new mongoose.Schema({
     timestamps: true
 });
 
+//////////////////////////////////////////////////
+// PRE SAVE MIDDLEWARE
+//////////////////////////////////////////////////
+
 userSchema.pre('save', function () {
 
     if (this.role === 'Donor') {
+
         this.donorType = 'Donor';
         this.receiverType = '';
+
     }
 
     if (this.role === 'Receiver') {
-        this.receiverType = '';
+
+        this.receiverType = 'Receiver';
         this.donorType = '';
+
     }
 
     if (this.role === 'Driver') {
+
         this.businessName = '';
+
     }
 
 });
+
+//////////////////////////////////////////////////
+// REMOVE PASSWORD
+//////////////////////////////////////////////////
 
 userSchema.methods.toJSON = function () {
 

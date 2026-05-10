@@ -10,21 +10,15 @@ const Availability = require('../models/Availability');
 const router = express.Router();
 
 //////////////////////////////////////////////////
-// MULTER CONFIG
+// MULTER
 //////////////////////////////////////////////////
 
 const upload = multer({
-
     storage: multer.memoryStorage(),
-
     limits: {
         fileSize: 5 * 1024 * 1024
     }
 });
-
-//////////////////////////////////////////////////
-// ALLOWED FILES
-//////////////////////////////////////////////////
 
 const uploadFields = upload.fields([
     { name: 'avatar', maxCount: 1 },
@@ -32,12 +26,15 @@ const uploadFields = upload.fields([
 ]);
 
 //////////////////////////////////////////////////
-// IMGBB UPLOAD
+// IMGBB
 //////////////////////////////////////////////////
 
 async function uploadToImgBB(buffer) {
 
+    if (!buffer) return "";
+
     const apiKey =
+        process.env.IMGBB_API_KEY ||
         "e588c3e5bae57852fb441c6f15619cad";
 
     const formData = new FormData();
@@ -49,7 +46,7 @@ async function uploadToImgBB(buffer) {
 
     try {
 
-        const res = await axios.post(
+        const response = await axios.post(
             `https://api.imgbb.com/1/upload?key=${apiKey}`,
             formData,
             {
@@ -57,18 +54,16 @@ async function uploadToImgBB(buffer) {
             }
         );
 
-        return res.data.data.url;
+        return response.data.data.url;
 
-    } catch (err) {
+    } catch (error) {
 
-        console.error(
-            "ImgBB Error:",
-            err.message
+        console.log(
+            "IMGBB ERROR:",
+            error.message
         );
 
-        throw new Error(
-            "Image upload failed"
-        );
+        return "";
     }
 }
 
@@ -78,7 +73,23 @@ async function uploadToImgBB(buffer) {
 
 router.post(
     '/register',
-    uploadFields,
+
+    (req, res, next) => {
+
+        uploadFields(req, res, function (err) {
+
+            if (err) {
+
+                return res.status(400).json({
+                    success: false,
+                    message: err.message
+                });
+            }
+
+            next();
+        });
+    },
+
     async (req, res) => {
 
         try {
@@ -95,7 +106,7 @@ router.post(
             } = req.body;
 
             //////////////////////////////////////////////////
-            // REQUIRED FIELDS
+            // VALIDATION
             //////////////////////////////////////////////////
 
             if (
@@ -108,8 +119,7 @@ router.post(
 
                 return res.status(400).json({
                     success: false,
-                    message:
-                        'Missing required fields'
+                    message: 'Missing required fields'
                 });
             }
 
@@ -118,29 +128,15 @@ router.post(
             //////////////////////////////////////////////////
 
             const roleMap = {
-                driver: 'Driver',
                 donor: 'Donor',
-                receiver: 'Receiver'
+                receiver: 'Receiver',
+                driver: 'Driver'
             };
 
             const finalRole =
                 roleMap[
-                    role?.toLowerCase()
+                    role.toLowerCase()
                 ] || role;
-
-            if (
-                ![
-                    'Driver',
-                    'Donor',
-                    'Receiver'
-                ].includes(finalRole)
-            ) {
-
-                return res.status(400).json({
-                    success: false,
-                    message: 'Invalid role'
-                });
-            }
 
             //////////////////////////////////////////////////
             // CHECK EMAIL
@@ -200,7 +196,12 @@ router.post(
                     address || "",
 
                 businessName:
-                    businessName || "",
+                    finalRole === 'Driver'
+                        ? ''
+                        : (
+                            businessName ||
+                            username
+                        ),
 
                 avatar: "",
 
@@ -210,45 +211,33 @@ router.post(
             };
 
             //////////////////////////////////////////////////
-            // IMAGE UPLOAD
+            // UPLOAD IMAGES
             //////////////////////////////////////////////////
 
             if (req.files) {
 
-                try {
+                if (
+                    req.files.avatar?.[0]
+                ) {
 
-                    // Avatar
-                    if (
-                        req.files.avatar?.[0]
-                    ) {
+                    userData.avatar =
+                        await uploadToImgBB(
+                            req.files.avatar[0]
+                                .buffer
+                        );
+                }
 
-                        userData.avatar =
-                            await uploadToImgBB(
-                                req.files.avatar[0]
-                                    .buffer
-                            );
-                    }
+                if (
+                    req.files
+                        .licenseImage?.[0]
+                ) {
 
-                    // License Image
-                    if (
-                        req.files
-                            .licenseImage?.[0]
-                    ) {
-
-                        userData.licenseImage =
-                            await uploadToImgBB(
-                                req.files
-                                    .licenseImage[0]
-                                    .buffer
-                            );
-                    }
-
-                } catch (imgErr) {
-
-                    console.log(
-                        'Image upload failed:',
-                        imgErr.message
-                    );
+                    userData.licenseImage =
+                        await uploadToImgBB(
+                            req.files
+                                .licenseImage[0]
+                                .buffer
+                        );
                 }
             }
 
@@ -257,62 +246,50 @@ router.post(
             //////////////////////////////////////////////////
 
             if (
-                finalRole === 'Driver'
+                finalRole === 'Driver' &&
+                availability
             ) {
 
-                userData.businessName =
-                    '';
+                try {
 
-                if (availability) {
+                    const parsedAvailability =
+                        typeof availability ===
+                        'string'
+                            ? JSON.parse(
+                                  availability
+                              )
+                            : availability;
 
-                    try {
+                    const availabilityDoc =
+                        await Availability.create({
+                            timeSlot:
+                                parsedAvailability.timeSlot ||
+                                "",
 
-                        const parsedAvailability =
-                            typeof availability ===
-                            'string'
-                                ? JSON.parse(
-                                      availability
-                                  )
-                                : availability;
+                            customTime:
+                                parsedAvailability.customTime ||
+                                "",
 
-                        const availabilityDoc =
-                            await Availability.create({
+                            days:
+                                parsedAvailability.days ||
+                                [],
 
-                                timeSlot:
-                                    parsedAvailability.timeSlot ||
-                                    "",
-
-                                customTime:
-                                    parsedAvailability.customTime ||
-                                    "",
-
-                                days:
-                                    parsedAvailability.days ||
-                                    [],
-
-                                frequency:
-                                    parsedAvailability.frequency ||
-                                    ""
-                            });
-
-                        userData.availability =
-                            availabilityDoc._id;
-
-                    } catch (e) {
-
-                        return res.status(400).json({
-                            success: false,
-                            message:
-                                'Invalid availability format'
+                            frequency:
+                                parsedAvailability.frequency ||
+                                ""
                         });
-                    }
+
+                    userData.availability =
+                        availabilityDoc._id;
+
+                } catch (err) {
+
+                    return res.status(400).json({
+                        success: false,
+                        message:
+                            'Invalid availability format'
+                    });
                 }
-
-            } else {
-
-                userData.businessName =
-                    businessName ||
-                    username;
             }
 
             //////////////////////////////////////////////////
@@ -337,8 +314,8 @@ router.post(
 
         } catch (error) {
 
-            console.error(
-                'REGISTER ERROR:',
+            console.log(
+                "REGISTER ERROR:",
                 error
             );
 
@@ -368,10 +345,6 @@ router.post(
                 password
             } = req.body;
 
-            //////////////////////////////////////////////////
-            // VALIDATION
-            //////////////////////////////////////////////////
-
             if (
                 !email ||
                 !password
@@ -380,13 +353,9 @@ router.post(
                 return res.status(400).json({
                     success: false,
                     message:
-                        'Email and password are required'
+                        'Email and password required'
                 });
             }
-
-            //////////////////////////////////////////////////
-            // FIND USER
-            //////////////////////////////////////////////////
 
             const user =
                 await User.findOne({
@@ -411,10 +380,6 @@ router.post(
                 });
             }
 
-            //////////////////////////////////////////////////
-            // CHECK PASSWORD
-            //////////////////////////////////////////////////
-
             const isMatch =
                 await bcrypt.compare(
                     password,
@@ -430,18 +395,10 @@ router.post(
                 });
             }
 
-            //////////////////////////////////////////////////
-            // REMOVE PASSWORD
-            //////////////////////////////////////////////////
-
             const userObj =
                 user.toObject();
 
             delete userObj.password;
-
-            //////////////////////////////////////////////////
-            // SUCCESS
-            //////////////////////////////////////////////////
 
             return res.status(200).json({
                 success: true,
@@ -453,7 +410,7 @@ router.post(
         } catch (error) {
 
             console.log(
-                'LOGIN ERROR:',
+                "LOGIN ERROR:",
                 error
             );
 
