@@ -1,36 +1,117 @@
 const mongoose = require('mongoose');
 
+const availabilitySchema = new mongoose.Schema({
+    timeSlot: { type: String, default: "" },
+    customTime: { type: String, default: "" },
+    days: [{ type: String }],
+    frequency: { type: String, default: "" }
+}, { _id: false });
+
 const userSchema = new mongoose.Schema({
-    username: { type: String, required: true },
-    email: { type: String, required: true, unique: true, lowercase: true },
-    phone: { type: String, required: true },
-    password: { type: String, required: true },
+    username: { 
+        type: String, 
+        required: true, 
+        trim: true 
+    },
+
+    email: { 
+        type: String, 
+        required: true, 
+        unique: true, 
+        lowercase: true,
+        trim: true 
+    },
+
+    phone: { 
+        type: String, 
+        required: true, 
+        trim: true 
+    },
+
+    password: { 
+        type: String, 
+        required: true,
+        select: false // 🔐 يمنع رجوع الباسورد
+    },
+
     role: { 
         type: String, 
-        enum: ['Donor', 'Receiver', 'Driver'], // تأكد أن الحرف الأول كبير
+        enum: ['Donor', 'Receiver', 'Driver'],
         required: true 
     },
-    // جعلنا هذه الحقول مرنة جداً لتجنب الـ Server Error
-    donorType: { type: String, default: "" },
-    receiverType: { type: String, default: "" },
-    businessName: { type: String, default: "" }, // حذفنا الـ Validator الصعب هنا
-    address: { type: String, default: "" },
-    avatar: { type: String, default: "" },
-    licenseImage: { type: String, default: "" },
-    isVerified: { type: Boolean, default: false },
-    availability: {
-        timeSlot: String,
-        customTime: String,
-        days: [String],
-        frequency: String
-    }
-}, { timestamps: true });
 
-// هذا الجزء يضمن ملء البيانات تلقائياً قبل الحفظ
-userSchema.pre('save', function (next) {
-    if (this.role === 'Donor') this.donorType = 'Donor';
-    if (this.role === 'Receiver') this.receiverType = 'Receiver';
-    next();
+    donorType: { 
+        type: String, 
+        default: "" 
+    },
+
+    receiverType: { 
+        type: String, 
+        default: "" 
+    },
+
+    businessName: { 
+        type: String, 
+        default: "" 
+    },
+
+    address: { 
+        type: String, 
+        default: "" 
+    },
+
+    avatar: { 
+        type: String, 
+        default: "" 
+    },
+
+    licenseImage: { 
+        type: String, 
+        default: "" 
+    },
+
+    isVerified: { 
+        type: Boolean, 
+        default: false 
+    },
+
+    availability: {
+        type: availabilitySchema,
+        default: () => ({})
+    }
+
+}, { 
+    timestamps: true 
 });
+
+
+// ✅ Middleware بدون next (حل المشكلة)
+userSchema.pre('save', function () {
+    if (this.role === 'Donor') {
+        this.donorType = 'Donor';
+        this.receiverType = '';
+    }
+
+    if (this.role === 'Receiver') {
+        this.receiverType = 'Receiver';
+        this.donorType = '';
+    }
+
+    if (this.role === 'Driver') {
+        this.businessName = "";
+    }
+});
+
+
+// 🔐 حذف الباسورد من أي response
+userSchema.methods.toJSON = function () {
+    const obj = this.toObject();
+    delete obj.password;
+    return obj;
+};
+
+
+// ⚡ تحسين البحث
+userSchema.index({ email: 1 });
 
 module.exports = mongoose.model('User', userSchema);
