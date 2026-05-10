@@ -195,13 +195,7 @@ router.post(
                 address:
                     address || "",
 
-                businessName:
-                    finalRole === 'Driver'
-                        ? ''
-                        : (
-                            businessName ||
-                            username
-                        ),
+              businessName: finalRole === 'Driver' ? '' : (businessName ? businessName.trim() : ""),
 
                 avatar: "",
 
