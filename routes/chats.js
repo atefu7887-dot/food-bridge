@@ -1,6 +1,5 @@
 const express = require('express');
 const router = express.Router();
-
 const mongoose = require('mongoose');
 
 const Chat = require('../models/Chat');
@@ -8,120 +7,59 @@ const Message = require('../models/Message');
 const Donation = require('../models/Donation');
 
 //////////////////////////////////////////////////
-// ACCESS CHAT
+// 1. 🚪 إنشاء أو جلب غرفة محادثة (Access Chat)
 //////////////////////////////////////////////////
-
 router.post('/access', async (req, res) => {
-
   try {
+    let { donationId, senderId, receiverId } = req.body;
 
-    let {
-      donationId,
-      senderId,
-      receiverId,
-    } = req.body;
-
-    //////////////////////////////////////////////////
-    // VALIDATION
-    //////////////////////////////////////////////////
-
-    if (
-      !donationId ||
-      !senderId ||
-      !receiverId
-    ) {
-
+    if (!donationId || !senderId || !receiverId) {
       return res.status(400).json({
         success: false,
-        message: 'Missing required fields',
+        message: 'Missing required fields (donationId, senderId, receiverId)',
       });
     }
-
-    //////////////////////////////////////////////////
-    // STRING IDs
-    //////////////////////////////////////////////////
 
     donationId = donationId.toString();
     senderId = senderId.toString();
     receiverId = receiverId.toString();
-
-    //////////////////////////////////////////////////
-    // CHECK OBJECT IDs
-    //////////////////////////////////////////////////
 
     if (
       !mongoose.Types.ObjectId.isValid(donationId) ||
       !mongoose.Types.ObjectId.isValid(senderId) ||
       !mongoose.Types.ObjectId.isValid(receiverId)
     ) {
-
       return res.status(400).json({
         success: false,
         message: 'Invalid Object ID(s) provided',
       });
     }
 
-    //////////////////////////////////////////////////
-    // PREPARE PARTICIPANTS
-    //////////////////////////////////////////////////
+    // ترتيب المعرفات لمنع التكرار وضمان ربط دائم لنفس الطرفين
+    const participants = [senderId, receiverId].sort();
 
-    const participants = [
-      senderId,
-      receiverId,
-    ].sort();
-
-    //////////////////////////////////////////////////
-    // FIND CHAT
-    //////////////////////////////////////////////////
-
+    // البحث عن غرفة تجمع هذين الشخصين بخصوص هذا التبرع
     let chat = await Chat.findOne({
       donation: donationId,
-
       participants: {
         $all: participants,
-
         $size: 2,
       },
     })
-      .populate(
-        'participants',
-        'username phone avatar role',
-      )
-      .populate(
-        'donation',
-        'title status',
-      );
+      .populate('participants', 'username phone avatar role')
+      .populate('donation', 'title status');
 
-    //////////////////////////////////////////////////
-    // CREATE CHAT
-    //////////////////////////////////////////////////
-
+    // إذا لم تكن موجودة، نقوم بإنشائها
     if (!chat) {
+      const createdChat = await Chat.create({
+        donation: donationId,
+        participants: participants,
+      });
 
-      const createdChat =
-        await Chat.create({
-
-          donation: donationId,
-
-          participants: participants,
-        });
-
-      chat = await Chat.findById(
-        createdChat._id,
-      )
-        .populate(
-          'participants',
-          'username phone avatar role',
-        )
-        .populate(
-          'donation',
-          'title status',
-        );
+      chat = await Chat.findById(createdChat._id)
+        .populate('participants', 'username phone avatar role')
+        .populate('donation', 'title status');
     }
-
-    //////////////////////////////////////////////////
-    // RESPONSE
-    //////////////////////////////////////////////////
 
     return res.status(200).json({
       success: true,
@@ -129,112 +67,114 @@ router.post('/access', async (req, res) => {
     });
 
   } catch (error) {
-
-    console.log(
-      'ACCESS CHAT ERROR =>',
-      error,
-    );
-
-    //////////////////////////////////////////////////
-    // DUPLICATE KEY
-    //////////////////////////////////////////////////
+    console.log('ACCESS CHAT ERROR =>', error);
 
     if (error.code === 11000) {
-
       return res.status(200).json({
         success: true,
-        message:
-          'Chat already exists',
+        message: 'Chat already exists',
       });
     }
 
     return res.status(500).json({
       success: false,
-
       error: error.message,
     });
   }
 });
 
 //////////////////////////////////////////////////
-// SEND MESSAGE (يستقبل الحقول المصححة بنجاح ✅)
+// 2. ✉️ إرسال رسالة جديدة (Send Message)
 //////////////////////////////////////////////////
-
 router.post('/send', async (req, res) => {
-    try {
-        const { chatId, senderId, text } = req.body;
+  try {
+    const { chatId, senderId, text } = req.body;
 
-        // التحقق من وصول المدخلات المطلوبة
-        if (!chatId || !senderId || !text) {
-            return res.status(400).json({ 
-                success: false, 
-                message: "Missing fields. Required: chatId, senderId, text" 
-            });
-        }
-
-        // 1. إنشاء الرسالة وحفظها
-        const newMessage = new Message({
-            chat: chatId,
-            sender: senderId,
-            text: text.trim()
-        });
-        await newMessage.save();
-
-        // عمل Populate لبيانات المرسل لترجع كاملة لتطبيق الهاتف
-        const populatedMessage = await Message.findById(newMessage._id)
-            .populate('sender', 'username avatar role');
-
-        // 2. تحديث آخر رسالة (lastMessage) في المحادثة لتسهيل العرض
-        await Chat.findByIdAndUpdate(chatId, {
-            lastMessage: {
-                text: text.trim(),
-                sender: senderId,
-                createdAt: new Date()
-            }
-        });
-
-        res.status(201).json({ success: true, message: populatedMessage });
-    } catch (error) {
-        console.log("SEND MESSAGE ERROR =>", error);
-        res.status(500).json({ success: false, error: error.message });
+    if (!chatId || !senderId || !text) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing fields. Required: chatId, senderId, text"
+      });
     }
+
+    // حفظ الرسالة بداخل قاعدة البيانات
+    const newMessage = new Message({
+      chat: chatId,
+      sender: senderId,
+      text: text.trim()
+    });
+    await newMessage.save();
+
+    const populatedMessage = await Message.findById(newMessage._id)
+      .populate('sender', 'username avatar role');
+
+    // تحديث تفاصيل آخر رسالة تم إرسالها لتسهيل عرضها في القوائم
+    await Chat.findByIdAndUpdate(chatId, {
+      lastMessage: {
+        text: text.trim(),
+        sender: senderId,
+        createdAt: new Date()
+      }
+    });
+
+    res.status(201).json({
+      success: true,
+      message: populatedMessage
+    });
+  } catch (error) {
+    console.log("SEND MESSAGE ERROR =>", error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
 });
 
 //////////////////////////////////////////////////
-// GET CHAT MESSAGES
+// 3. 📜 جلب رسائل غرفة معينة
 //////////////////////////////////////////////////
-
 router.get('/:chatId/messages', async (req, res) => {
-    try {
-        const { chatId } = req.params;
+  try {
+    const { chatId } = req.params;
 
-        const messages = await Message.find({ chat: chatId })
-            .populate('sender', 'username avatar role')
-            .sort({ createdAt: 1 }); // ترتيب من الأقدم للأحدث ليظهر كتسلسل شات طبيعي
-        
-        res.status(200).json({ success: true, messages });
-    } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
-    }
+    const messages = await Message.find({ chat: chatId })
+      .populate('sender', 'username avatar role')
+      .sort({ createdAt: 1 }); // الترتيب من الأقدم للأحدث
+
+    res.status(200).json({
+      success: true,
+      messages
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
 });
 
 //////////////////////////////////////////////////
-// GET MY CHATS
+// 4. 🗂️ جلب المحادثات الخاصة بمستخدم معين
 //////////////////////////////////////////////////
-
 router.get('/my-chats/:userId', async (req, res) => {
-    try {
-        const chats = await Chat.find({
-            participants: req.params.userId
-        })
-        .populate('participants', 'username phone avatar role')
-        .populate('donation', 'title status')
-        .sort({ updatedAt: -1 }); // عرض أحدث المحادثات النشطة أولاً
+  try {
+    const chats = await Chat.find({
+      participants: req.params.userId
+    })
+      .populate('participants', 'username phone avatar role')
+      .populate('donation', 'title status')
+      .sort({ updatedAt: -1 }); // فرز حسب أحدث نشاط
 
-        res.status(200).json({ success: true, chats });
-    } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
-    }
+    res.status(200).json({
+      success: true,
+      chats
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
 });
 
 module.exports = router;
