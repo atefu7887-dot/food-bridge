@@ -1,4 +1,6 @@
 const express = require('express');
+const mongoose = require('mongoose');
+
 const router = express.Router();
 
 const Chat = require('../models/Chat');
@@ -10,35 +12,75 @@ const Donation = require('../models/Donation');
 //////////////////////////////////////////////////
 
 router.post('/access', async (req, res) => {
+
   try {
+
     const {
       donationId,
       senderId,
       receiverId,
     } = req.body;
 
-    if (!donationId || !senderId || !receiverId) {
+    //////////////////////////////////////////////////
+    // VALIDATION
+    //////////////////////////////////////////////////
+
+    if (
+      !donationId ||
+      !senderId ||
+      !receiverId
+    ) {
+
       return res.status(400).json({
         success: false,
         message: 'Missing required fields',
       });
     }
 
-    // التأكد إن التبرع موجود
-    const donation = await Donation.findById(donationId);
+    //////////////////////////////////////////////////
+    // CHECK DONATION
+    //////////////////////////////////////////////////
+
+    const donation =
+        await Donation.findById(
+      donationId,
+    );
 
     if (!donation) {
+
       return res.status(404).json({
         success: false,
         message: 'Donation not found',
       });
     }
 
-    // البحث عن شات موجود
+    //////////////////////////////////////////////////
+    // OBJECT IDS
+    //////////////////////////////////////////////////
+
+    const senderObjectId =
+        new mongoose.Types.ObjectId(
+      senderId,
+    );
+
+    const receiverObjectId =
+        new mongoose.Types.ObjectId(
+      receiverId,
+    );
+
+    //////////////////////////////////////////////////
+    // FIND CHAT
+    //////////////////////////////////////////////////
+
     let chat = await Chat.findOne({
+
       donation: donationId,
+
       participants: {
-        $all: [senderId, receiverId],
+        $all: [
+          senderObjectId,
+          receiverObjectId,
+        ],
       },
     })
       .populate(
@@ -50,13 +92,20 @@ router.post('/access', async (req, res) => {
         'title status',
       );
 
-    // إنشاء شات جديد لو مش موجود
+    //////////////////////////////////////////////////
+    // CREATE CHAT
+    //////////////////////////////////////////////////
+
     if (!chat) {
-      const createdChat = await Chat.create({
+
+      const createdChat =
+          await Chat.create({
+
         donation: donationId,
+
         participants: [
-          senderId,
-          receiverId,
+          senderObjectId,
+          receiverObjectId,
         ],
       });
 
@@ -73,11 +122,17 @@ router.post('/access', async (req, res) => {
         );
     }
 
+    //////////////////////////////////////////////////
+    // RESPONSE
+    //////////////////////////////////////////////////
+
     return res.status(200).json({
       success: true,
       chat,
     });
+
   } catch (error) {
+
     console.log(
       'ACCESS CHAT ERROR:',
       error,
@@ -95,48 +150,91 @@ router.post('/access', async (req, res) => {
 //////////////////////////////////////////////////
 
 router.post('/send', async (req, res) => {
+
   try {
+
     const {
       chatId,
       senderId,
       text,
     } = req.body;
 
-    if (!chatId || !senderId || !text) {
+    //////////////////////////////////////////////////
+    // VALIDATION
+    //////////////////////////////////////////////////
+
+    if (
+      !chatId ||
+      !senderId ||
+      !text
+    ) {
+
       return res.status(400).json({
         success: false,
         message: 'Missing required fields',
       });
     }
 
-    // التأكد إن الشات موجود
-    const chat = await Chat.findById(chatId);
+    //////////////////////////////////////////////////
+    // CHECK CHAT
+    //////////////////////////////////////////////////
+
+    const chat =
+        await Chat.findById(chatId);
 
     if (!chat) {
+
       return res.status(404).json({
         success: false,
         message: 'Chat not found',
       });
     }
 
-    // إنشاء الرسالة
-    const newMessage = await Message.create({
+    //////////////////////////////////////////////////
+    // CREATE MESSAGE
+    //////////////////////////////////////////////////
+
+    const newMessage =
+        await Message.create({
+
       chat: chatId,
-      sender: senderId,
+
+      sender:
+          new mongoose.Types.ObjectId(
+        senderId,
+      ),
+
       text: text.trim(),
     });
 
-    // تحديث آخر رسالة في الشات
-    await Chat.findByIdAndUpdate(chatId, {
-      lastMessage: {
-        text: text.trim(),
-        sender: senderId,
-        createdAt: new Date(),
-      },
-    });
+    //////////////////////////////////////////////////
+    // UPDATE LAST MESSAGE
+    //////////////////////////////////////////////////
 
-    // جلب الرسالة بعد الـ populate
-    const message = await Message.findById(
+    await Chat.findByIdAndUpdate(
+      chatId,
+      {
+
+        lastMessage: {
+
+          text: text.trim(),
+
+          sender:
+              new mongoose.Types.ObjectId(
+            senderId,
+          ),
+
+          createdAt: new Date(),
+        },
+      },
+    );
+
+    //////////////////////////////////////////////////
+    // GET MESSAGE
+    //////////////////////////////////////////////////
+
+    const message =
+        await Message.findById(
       newMessage._id,
     )
       .populate(
@@ -145,11 +243,17 @@ router.post('/send', async (req, res) => {
       )
       .populate('chat');
 
+    //////////////////////////////////////////////////
+    // RESPONSE
+    //////////////////////////////////////////////////
+
     return res.status(201).json({
       success: true,
       message,
     });
+
   } catch (error) {
+
     console.log(
       'SEND MESSAGE ERROR:',
       error,
@@ -169,27 +273,33 @@ router.post('/send', async (req, res) => {
 router.get(
   '/:chatId/messages',
   async (req, res) => {
+
     try {
-      const { chatId } = req.params;
+
+      const { chatId } =
+          req.params;
 
       const messages =
-        await Message.find({
-          chat: chatId,
-        })
-          .populate(
-            'sender',
-            'username avatar role',
-          )
-          .populate('chat')
-          .sort({
-            createdAt: 1,
-          });
+          await Message.find({
+
+        chat: chatId,
+      })
+        .populate(
+          'sender',
+          'username avatar role',
+        )
+        .populate('chat')
+        .sort({
+          createdAt: 1,
+        });
 
       return res.status(200).json({
         success: true,
         messages,
       });
+
     } catch (error) {
+
       console.log(
         'GET MESSAGES ERROR:',
         error,
@@ -210,11 +320,19 @@ router.get(
 router.get(
   '/my-chats/:userId',
   async (req, res) => {
-    try {
-      const { userId } = req.params;
 
-      const chats = await Chat.find({
-        participants: userId,
+    try {
+
+      const { userId } =
+          req.params;
+
+      const chats =
+          await Chat.find({
+
+        participants:
+            new mongoose.Types.ObjectId(
+          userId,
+        ),
       })
         .populate(
           'participants',
@@ -232,7 +350,9 @@ router.get(
         success: true,
         chats,
       });
+
     } catch (error) {
+
       console.log(
         'GET MY CHATS ERROR:',
         error,
