@@ -1,5 +1,5 @@
 const express = require('express');
-const bcrypt = require('bcryptjs');
+const bcrypt = require('bcrypt');
 const multer = require('multer');
 const axios = require('axios');
 const FormData = require('form-data');
@@ -10,15 +10,21 @@ const Availability = require('../models/Availability');
 const router = express.Router();
 
 //////////////////////////////////////////////////
-// Multer Config
+// MULTER CONFIG
 //////////////////////////////////////////////////
 
 const upload = multer({
+
     storage: multer.memoryStorage(),
+
     limits: {
         fileSize: 5 * 1024 * 1024
     }
 });
+
+//////////////////////////////////////////////////
+// ALLOWED FILES
+//////////////////////////////////////////////////
 
 const uploadFields = upload.fields([
     { name: 'avatar', maxCount: 1 },
@@ -26,20 +32,24 @@ const uploadFields = upload.fields([
 ]);
 
 //////////////////////////////////////////////////
-// Upload To ImgBB
+// IMGBB UPLOAD
 //////////////////////////////////////////////////
 
 async function uploadToImgBB(buffer) {
 
-    const apiKey = e588c3e5bae57852fb441c6f15619cad;
+    const apiKey =
+        "e588c3e5bae57852fb441c6f15619cad";
 
     const formData = new FormData();
 
-    formData.append('image', buffer.toString('base64'));
+    formData.append(
+        'image',
+        buffer.toString('base64')
+    );
 
     try {
 
-        const response = await axios.post(
+        const res = await axios.post(
             `https://api.imgbb.com/1/upload?key=${apiKey}`,
             formData,
             {
@@ -47,13 +57,18 @@ async function uploadToImgBB(buffer) {
             }
         );
 
-        return response.data.data.url;
+        return res.data.data.url;
 
-    } catch (error) {
+    } catch (err) {
 
-        console.log('ImgBB Error:', error.message);
+        console.error(
+            "ImgBB Error:",
+            err.message
+        );
 
-        throw new Error('Image upload failed');
+        throw new Error(
+            "Image upload failed"
+        );
     }
 }
 
@@ -61,294 +76,396 @@ async function uploadToImgBB(buffer) {
 // REGISTER
 //////////////////////////////////////////////////
 
-router.post('/register', uploadFields, async (req, res) => {
+router.post(
+    '/register',
+    uploadFields,
+    async (req, res) => {
 
-    try {
+        try {
 
-        const {
-            username,
-            email,
-            phone,
-            password,
-            role,
-            businessName,
-            address,
-            availability
-        } = req.body;
+            const {
+                username,
+                email,
+                phone,
+                password,
+                role,
+                businessName,
+                address,
+                availability
+            } = req.body;
 
-        //////////////////////////////////////////////////
-        // Validate Required Fields
-        //////////////////////////////////////////////////
+            //////////////////////////////////////////////////
+            // REQUIRED FIELDS
+            //////////////////////////////////////////////////
 
-        if (!username || !email || !phone || !password || !role) {
+            if (
+                !username ||
+                !email ||
+                !phone ||
+                !password ||
+                !role
+            ) {
 
-            return res.status(400).json({
-                success: false,
-                message: 'Missing required fields'
-            });
-        }
-
-        //////////////////////////////////////////////////
-        // Role Validation
-        //////////////////////////////////////////////////
-
-        const roleMap = {
-            driver: 'Driver',
-            donor: 'Donor',
-            receiver: 'Receiver'
-        };
-
-        const finalRole = role
-            ? roleMap[role.toLowerCase()] || role
-            : null;
-
-        if (!['Donor', 'Receiver', 'Driver'].includes(finalRole)) {
-
-            return res.status(400).json({
-                success: false,
-                message: 'Invalid role'
-            });
-        }
-
-        //////////////////////////////////////////////////
-        // Check Existing Email
-        //////////////////////////////////////////////////
-
-        const existingUser = await User.findOne({
-            email: email.toLowerCase().trim()
-        });
-
-        if (existingUser) {
-
-            return res.status(400).json({
-                success: false,
-                message: 'Email already exists'
-            });
-        }
-
-        //////////////////////////////////////////////////
-        // Hash Password
-        //////////////////////////////////////////////////
-
-        const hashedPassword = await bcrypt.hash(password, 10);
-
-        //////////////////////////////////////////////////
-        // User Data
-        //////////////////////////////////////////////////
-
-        let userData = {
-
-            username: username.trim(),
-
-            email: email.toLowerCase().trim(),
-
-            phone: phone.trim(),
-
-            password: hashedPassword,
-
-            role: finalRole,
-
-            address: address || "",
-
-            avatar: "",
-
-            licenseImage: "",
-
-            availability: null
-        };
-
-        //////////////////////////////////////////////////
-        // Upload Images
-        //////////////////////////////////////////////////
-
-        if (req.files) {
-
-            try {
-
-                if (req.files.avatar?.[0]) {
-
-                    userData.avatar = await uploadToImgBB(
-                        req.files.avatar[0].buffer
-                    );
-                }
-
-                if (req.files.licenseImage?.[0]) {
-
-                    userData.licenseImage = await uploadToImgBB(
-                        req.files.licenseImage[0].buffer
-                    );
-                }
-
-            } catch (imgError) {
-
-                console.log('Image Upload Error:', imgError.message);
+                return res.status(400).json({
+                    success: false,
+                    message:
+                        'Missing required fields'
+                });
             }
-        }
 
-        //////////////////////////////////////////////////
-        // Driver Availability
-        //////////////////////////////////////////////////
+            //////////////////////////////////////////////////
+            // ROLE
+            //////////////////////////////////////////////////
 
-        if (finalRole === 'Driver') {
+            const roleMap = {
+                driver: 'Driver',
+                donor: 'Donor',
+                receiver: 'Receiver'
+            };
 
-            userData.businessName = '';
+            const finalRole =
+                roleMap[
+                    role?.toLowerCase()
+                ] || role;
 
-            if (availability) {
+            if (
+                ![
+                    'Driver',
+                    'Donor',
+                    'Receiver'
+                ].includes(finalRole)
+            ) {
+
+                return res.status(400).json({
+                    success: false,
+                    message: 'Invalid role'
+                });
+            }
+
+            //////////////////////////////////////////////////
+            // CHECK EMAIL
+            //////////////////////////////////////////////////
+
+            const existingUser =
+                await User.findOne({
+                    email:
+                        email
+                            .toLowerCase()
+                            .trim()
+                });
+
+            if (existingUser) {
+
+                return res.status(400).json({
+                    success: false,
+                    message:
+                        'Email already exists'
+                });
+            }
+
+            //////////////////////////////////////////////////
+            // HASH PASSWORD
+            //////////////////////////////////////////////////
+
+            const hashedPassword =
+                await bcrypt.hash(
+                    password,
+                    10
+                );
+
+            //////////////////////////////////////////////////
+            // USER DATA
+            //////////////////////////////////////////////////
+
+            let userData = {
+
+                username:
+                    username.trim(),
+
+                email:
+                    email
+                        .toLowerCase()
+                        .trim(),
+
+                phone:
+                    phone.trim(),
+
+                password:
+                    hashedPassword,
+
+                role:
+                    finalRole,
+
+                address:
+                    address || "",
+
+                businessName:
+                    businessName || "",
+
+                avatar: "",
+
+                licenseImage: "",
+
+                availability: null
+            };
+
+            //////////////////////////////////////////////////
+            // IMAGE UPLOAD
+            //////////////////////////////////////////////////
+
+            if (req.files) {
 
                 try {
 
-                    const parsedAvailability =
-                        typeof availability === 'string'
-                            ? JSON.parse(availability)
-                            : availability;
+                    // Avatar
+                    if (
+                        req.files.avatar?.[0]
+                    ) {
 
-                    const availabilityDoc =
-                        await Availability.create({
+                        userData.avatar =
+                            await uploadToImgBB(
+                                req.files.avatar[0]
+                                    .buffer
+                            );
+                    }
 
-                            timeSlot:
-                                parsedAvailability.timeSlot || "",
+                    // License Image
+                    if (
+                        req.files
+                            .licenseImage?.[0]
+                    ) {
 
-                            customTime:
-                                parsedAvailability.customTime || "",
+                        userData.licenseImage =
+                            await uploadToImgBB(
+                                req.files
+                                    .licenseImage[0]
+                                    .buffer
+                            );
+                    }
 
-                            days:
-                                parsedAvailability.days || [],
+                } catch (imgErr) {
 
-                            frequency:
-                                parsedAvailability.frequency || ""
-                        });
-
-                    userData.availability =
-                        availabilityDoc._id;
-
-                } catch (error) {
-
-                    return res.status(400).json({
-                        success: false,
-                        message: 'Invalid availability format'
-                    });
+                    console.log(
+                        'Image upload failed:',
+                        imgErr.message
+                    );
                 }
             }
 
-        } else {
+            //////////////////////////////////////////////////
+            // DRIVER AVAILABILITY
+            //////////////////////////////////////////////////
 
-            userData.businessName =
-                businessName || username;
+            if (
+                finalRole === 'Driver'
+            ) {
+
+                userData.businessName =
+                    '';
+
+                if (availability) {
+
+                    try {
+
+                        const parsedAvailability =
+                            typeof availability ===
+                            'string'
+                                ? JSON.parse(
+                                      availability
+                                  )
+                                : availability;
+
+                        const availabilityDoc =
+                            await Availability.create({
+
+                                timeSlot:
+                                    parsedAvailability.timeSlot ||
+                                    "",
+
+                                customTime:
+                                    parsedAvailability.customTime ||
+                                    "",
+
+                                days:
+                                    parsedAvailability.days ||
+                                    [],
+
+                                frequency:
+                                    parsedAvailability.frequency ||
+                                    ""
+                            });
+
+                        userData.availability =
+                            availabilityDoc._id;
+
+                    } catch (e) {
+
+                        return res.status(400).json({
+                            success: false,
+                            message:
+                                'Invalid availability format'
+                        });
+                    }
+                }
+
+            } else {
+
+                userData.businessName =
+                    businessName ||
+                    username;
+            }
+
+            //////////////////////////////////////////////////
+            // CREATE USER
+            //////////////////////////////////////////////////
+
+            const newUser =
+                await User.create(
+                    userData
+                );
+
+            //////////////////////////////////////////////////
+            // RESPONSE
+            //////////////////////////////////////////////////
+
+            return res.status(201).json({
+                success: true,
+                message:
+                    'User created successfully 🎉',
+                user: newUser
+            });
+
+        } catch (error) {
+
+            console.error(
+                'REGISTER ERROR:',
+                error
+            );
+
+            return res.status(500).json({
+                success: false,
+                message:
+                    'Internal server error',
+                error:
+                    error.message
+            });
         }
-
-        //////////////////////////////////////////////////
-        // Create User
-        //////////////////////////////////////////////////
-
-        const newUser = await User.create(userData);
-
-        //////////////////////////////////////////////////
-        // Response
-        //////////////////////////////////////////////////
-
-        return res.status(201).json({
-            success: true,
-            message: 'User created successfully 🎉',
-            user: newUser
-        });
-
-    } catch (error) {
-
-        console.log('REGISTER ERROR:', error);
-
-        return res.status(500).json({
-            success: false,
-            message: 'Internal server error',
-            error: error.message
-        });
     }
-});
+);
 
 //////////////////////////////////////////////////
 // LOGIN
 //////////////////////////////////////////////////
 
-router.post('/login', async (req, res) => {
+router.post(
+    '/login',
+    async (req, res) => {
 
-    try {
+        try {
 
-        const { email, password } = req.body;
+            const {
+                email,
+                password
+            } = req.body;
 
-        //////////////////////////////////////////////////
-        // Validate
-        //////////////////////////////////////////////////
+            //////////////////////////////////////////////////
+            // VALIDATION
+            //////////////////////////////////////////////////
 
-        if (!email || !password) {
+            if (
+                !email ||
+                !password
+            ) {
 
-            return res.status(400).json({
+                return res.status(400).json({
+                    success: false,
+                    message:
+                        'Email and password are required'
+                });
+            }
+
+            //////////////////////////////////////////////////
+            // FIND USER
+            //////////////////////////////////////////////////
+
+            const user =
+                await User.findOne({
+
+                    email:
+                        email
+                            .toLowerCase()
+                            .trim()
+
+                })
+                .select('+password')
+                .populate(
+                    'availability'
+                );
+
+            if (!user) {
+
+                return res.status(400).json({
+                    success: false,
+                    message:
+                        'Email not found'
+                });
+            }
+
+            //////////////////////////////////////////////////
+            // CHECK PASSWORD
+            //////////////////////////////////////////////////
+
+            const isMatch =
+                await bcrypt.compare(
+                    password,
+                    user.password
+                );
+
+            if (!isMatch) {
+
+                return res.status(400).json({
+                    success: false,
+                    message:
+                        'Wrong password'
+                });
+            }
+
+            //////////////////////////////////////////////////
+            // REMOVE PASSWORD
+            //////////////////////////////////////////////////
+
+            const userObj =
+                user.toObject();
+
+            delete userObj.password;
+
+            //////////////////////////////////////////////////
+            // SUCCESS
+            //////////////////////////////////////////////////
+
+            return res.status(200).json({
+                success: true,
+                message:
+                    'Login successful ✅',
+                user: userObj
+            });
+
+        } catch (error) {
+
+            console.log(
+                'LOGIN ERROR:',
+                error
+            );
+
+            return res.status(500).json({
                 success: false,
-                message: 'Email and password are required'
+                message:
+                    'Internal server error',
+                error:
+                    error.message
             });
         }
-
-        //////////////////////////////////////////////////
-        // Find User
-        //////////////////////////////////////////////////
-
-        const user = await User.findOne({
-            email: email.toLowerCase().trim()
-        })
-        .select('+password')
-        .populate('availability');
-
-        if (!user) {
-
-            return res.status(400).json({
-                success: false,
-                message: 'Email not found'
-            });
-        }
-
-        //////////////////////////////////////////////////
-        // Compare Password
-        //////////////////////////////////////////////////
-
-        const isMatch = await bcrypt.compare(
-            password,
-            user.password
-        );
-
-        if (!isMatch) {
-
-            return res.status(400).json({
-                success: false,
-                message: 'Wrong password'
-            });
-        }
-
-        //////////////////////////////////////////////////
-        // Remove Password
-        //////////////////////////////////////////////////
-
-        const userObj = user.toObject();
-
-        delete userObj.password;
-
-        //////////////////////////////////////////////////
-        // Success
-        //////////////////////////////////////////////////
-
-        return res.status(200).json({
-            success: true,
-            message: 'Login successful ✅',
-            user: userObj
-        });
-
-    } catch (error) {
-
-        console.log('LOGIN ERROR:', error);
-
-        return res.status(500).json({
-            success: false,
-            message: 'Internal server error',
-            error: error.message
-        });
     }
-});
+);
 
 module.exports = router;
