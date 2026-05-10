@@ -168,10 +168,19 @@ router.post('/register', uploadFields, async (req, res) => {
 // 🔐 LOGIN
 //////////////////////////////////////////////////
 router.post('/login', async (req, res) => {
-    const { email, password } = req.body;
-
     try {
-        const user = await User.findOne({ email });
+        const { email, password } = req.body;
+
+        // 1. التأكد من وصول البيانات
+        if (!email || !password) {
+            return res.status(400).json({
+                success: false,
+                message: "Email and password are required"
+            });
+        }
+
+        // 2. البحث عن المستخدم (تحويل الإيميل لـ lowercase لضمان التطابق)
+        const user = await User.findOne({ email: email.toLowerCase().trim() });
 
         if (!user) {
             return res.status(400).json({
@@ -180,6 +189,7 @@ router.post('/login', async (req, res) => {
             });
         }
 
+        // 3. مقارنة الباسورد المشفر
         const isMatch = await bcrypt.compare(password, user.password);
 
         if (!isMatch) {
@@ -189,20 +199,21 @@ router.post('/login', async (req, res) => {
             });
         }
 
-        res.status(200).json({
+        // 4. النجاح (الباسورد سيحذف تلقائياً بفضل دالة toJSON في الموديل)
+        return res.status(200).json({
             success: true,
             message: "Login successful ✅",
             user: user
         });
 
-    } catch (err) {
-        console.error("Login Error:", err);
-        res.status(500).json({
+    } catch (error) {
+        console.error("🔥 LOGIN ERROR:", error);
+        return res.status(500).json({
             success: false,
-            message: "Server error"
+            message: "Internal server error",
+            error: error.message
         });
     }
 });
-
 
 module.exports = router;
