@@ -199,7 +199,7 @@ router.post('/login', async (req, res) => {
         console.error("Login Error:", err);
         res.status(500).json({
             success: false,
-            message: "Server error during login"
+            message: "Server error"
         });
     }
 });
