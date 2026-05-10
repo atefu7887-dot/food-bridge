@@ -8,69 +8,69 @@ const availabilitySchema = new mongoose.Schema({
 }, { _id: false });
 
 const userSchema = new mongoose.Schema({
-    username: { 
-        type: String, 
-        required: true, 
-        trim: true 
+    username: {
+        type: String,
+        required: true,
+        trim: true
     },
 
-   email: {
+    email: {
         type: String,
         required: true,
         unique: true,
         lowercase: true,
     },
 
-    phone: { 
-        type: String, 
-        required: true, 
-        trim: true 
+    phone: {
+        type: String,
+        required: true,
+        trim: true
     },
-
     password: {
         type: String,
         required: true,
+        select: false
     },
 
-    role: { 
-        type: String, 
+    role: {
+        type: String,
         enum: ['Donor', 'Receiver', 'Driver'],
-        required: true 
+        required: true
     },
 
-    donorType: { 
-        type: String, 
-        default: "" 
+    donorType: {
+        type: String,
+        default: ""
     },
 
-    receiverType: { 
-        type: String, 
-        default: "" 
+    receiverType: {
+        type: String,
+        default: ""
     },
 
-    businessName: { 
-        type: String, 
-        default: "" 
+    businessName: {
+        type: String,
+        default: ""
     },
 
-    address: { 
-        type: String, 
-        default: "" 
+    address: {
+        type: String,
+        default: ""
     },
 
-    avatar: { 
-        type: String, 
-        default: "" 
+    avatar: {
+        type: String,
+        default: ""
     },
 
-    licenseImage: { 
-        type: String, 
-        default: "" 
+    licenseImage: {
+        type: String,
+        default: ""
     },
 
-    isVerified: { 
-        type: Boolean, 
-        default: false 
+    isVerified: {
+        type: Boolean,
+        default: false
     },
 
     availability: {
@@ -78,8 +78,8 @@ const userSchema = new mongoose.Schema({
         default: () => ({})
     }
 
-}, { 
-    timestamps: true 
+}, {
+    timestamps: true
 });
 
 

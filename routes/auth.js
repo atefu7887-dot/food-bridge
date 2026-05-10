@@ -169,52 +169,62 @@ router.post('/register', uploadFields, async (req, res) => {
 //////////////////////////////////////////////////
 router.post('/login', async (req, res) => {
     try {
+
         const { email, password } = req.body;
 
-        // 1. تحقق من إرسال البيانات
+        // التحقق من البيانات
         if (!email || !password) {
             return res.status(400).json({
                 success: false,
-                message: "Email and password are required"
+                message: 'Email and password are required'
             });
         }
 
-        // 2. البحث عن المستخدم وإجبار السيرفر على جلب الباسورد المحمي
-        // استخدمنا .select('+password') هنا لفك القفل عن حقل الباسورد
-        const user = await User.findOne({ email: email.toLowerCase().trim() })
-                               .select('+password');
+        // البحث عن المستخدم
+        const user = await User.findOne({
+            email: email.toLowerCase().trim()
+        }).select('+password');
 
-        // 3. إذا لم يوجد المستخدم
+        // لو المستخدم مش موجود
         if (!user) {
             return res.status(400).json({
                 success: false,
-                message: "Email not registered"
+                message: 'Email not found'
             });
         }
 
-        // 4. مقارنة كلمة المرور
-        // الآن user.password تحتوي على الهاش المشفر القادم من القاعدة
-        const isMatch = await bcrypt.compare(password, user.password);
+        // مقارنة الباسورد
+        const isMatch = await bcrypt.compare(
+            password,
+            user.password
+        );
 
+        // لو الباسورد غلط
         if (!isMatch) {
             return res.status(400).json({
                 success: false,
-                message: "Incorrect password"
+                message: 'Wrong password'
             });
         }
 
-        // 5. إرجاع بيانات المستخدم (الباسورد سيختفي تلقائياً بفضل toJSON)
+        // حذف الباسورد قبل الإرسال
+        const userObj = user.toObject();
+        delete userObj.password;
+
+        // نجاح
         return res.status(200).json({
             success: true,
-            message: "Login successful ✅",
-            user: user // سيتم استدعاء user.toJSON() تلقائياً وحذف الباسورد
+            message: 'Login successful',
+            user: userObj
         });
 
     } catch (error) {
-        console.error("🔥 LOGIN ERROR:", error);
+
+        console.log("LOGIN ERROR:", error);
+
         return res.status(500).json({
             success: false,
-            message: "Internal server error",
+            message: 'Internal server error',
             error: error.message
         });
     }
