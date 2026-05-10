@@ -1,133 +1,250 @@
 const express = require('express');
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const axios = require('axios');
 const FormData = require('form-data');
+
 const User = require('../models/User');
+const Availability = require('../models/Availability');
 
 const router = express.Router();
 
-// إعداد multer لتخزين الصور في الذاكرة مؤقتاً
+//////////////////////////////////////////////////
+// Multer Config
+//////////////////////////////////////////////////
+
 const upload = multer({
     storage: multer.memoryStorage(),
-    limits: { fileSize: 5 * 1024 * 1024 } // الحد الأقصى 5 ميجا
+    limits: {
+        fileSize: 5 * 1024 * 1024
+    }
 });
 
-// تعريف الحقول المسموح برفعها
 const uploadFields = upload.fields([
     { name: 'avatar', maxCount: 1 },
     { name: 'licenseImage', maxCount: 1 }
 ]);
 
-// دالة الرفع لموقع ImgBB
+//////////////////////////////////////////////////
+// Upload To ImgBB
+//////////////////////////////////////////////////
+
 async function uploadToImgBB(buffer) {
-    const apiKey = "e588c3e5bae57852fb441c6f15619cad";
+
+    const apiKey = process.env.IMGBB_API_KEY;
+
     const formData = new FormData();
+
     formData.append('image', buffer.toString('base64'));
 
     try {
-        const res = await axios.post(
+
+        const response = await axios.post(
             `https://api.imgbb.com/1/upload?key=${apiKey}`,
             formData,
-            { headers: formData.getHeaders() }
+            {
+                headers: formData.getHeaders()
+            }
         );
-        return res.data.data.url;
-    } catch (err) {
-        console.error("ImgBB Error:", err.message);
-        throw new Error("Image upload failed");
+
+        return response.data.data.url;
+
+    } catch (error) {
+
+        console.log('ImgBB Error:', error.message);
+
+        throw new Error('Image upload failed');
     }
 }
 
 //////////////////////////////////////////////////
-// 📝 REGISTER
+// REGISTER
 //////////////////////////////////////////////////
+
 router.post('/register', uploadFields, async (req, res) => {
+
     try {
+
         const {
-            username, email, phone, password, role,
-            businessName, address, availability
+            username,
+            email,
+            phone,
+            password,
+            role,
+            businessName,
+            address,
+            availability
         } = req.body;
 
-        // ✅ 1. التحقق من البيانات المطلوبة
+        //////////////////////////////////////////////////
+        // Validate Required Fields
+        //////////////////////////////////////////////////
+
         if (!username || !email || !phone || !password || !role) {
+
             return res.status(400).json({
                 success: false,
-                message: 'Missing required fields',
-                fields: { username, email, phone, password, role }
+                message: 'Missing required fields'
             });
         }
 
-        // ✅ 2. التحقق من صحة الـ Role
-        const roleMap = { driver: 'Driver', donor: 'Donor', receiver: 'Receiver' };
-        const finalRole = roleMap[role?.toLowerCase()] || role;
+        //////////////////////////////////////////////////
+        // Role Validation
+        //////////////////////////////////////////////////
+
+        const roleMap = {
+            driver: 'Driver',
+            donor: 'Donor',
+            receiver: 'Receiver'
+        };
+
+        const finalRole = role
+            ? roleMap[role.toLowerCase()] || role
+            : null;
 
         if (!['Donor', 'Receiver', 'Driver'].includes(finalRole)) {
+
             return res.status(400).json({
                 success: false,
-                message: 'Invalid role value',
-                received: role
+                message: 'Invalid role'
             });
         }
 
-        // ✅ 3. التحقق من تكرار الإيميل
-        const existingUser = await User.findOne({ email: email.toLowerCase() });
+        //////////////////////////////////////////////////
+        // Check Existing Email
+        //////////////////////////////////////////////////
+
+        const existingUser = await User.findOne({
+            email: email.toLowerCase().trim()
+        });
+
         if (existingUser) {
+
             return res.status(400).json({
                 success: false,
                 message: 'Email already exists'
             });
         }
 
-        // ✅ 4. تشفير كلمة المرور
+        //////////////////////////////////////////////////
+        // Hash Password
+        //////////////////////////////////////////////////
+
         const hashedPassword = await bcrypt.hash(password, 10);
 
+        //////////////////////////////////////////////////
+        // User Data
+        //////////////////////////////////////////////////
+
         let userData = {
+
             username: username.trim(),
+
             email: email.toLowerCase().trim(),
+
             phone: phone.trim(),
+
             password: hashedPassword,
+
             role: finalRole,
+
             address: address || "",
+
             avatar: "",
+
+            licenseImage: "",
+
+            availability: null
         };
 
-        // ✅ 5. رفع الصور
+        //////////////////////////////////////////////////
+        // Upload Images
+        //////////////////////////////////////////////////
+
         if (req.files) {
+
             try {
+
                 if (req.files.avatar?.[0]) {
-                    userData.avatar = await uploadToImgBB(req.files.avatar[0].buffer);
+
+                    userData.avatar = await uploadToImgBB(
+                        req.files.avatar[0].buffer
+                    );
                 }
+
                 if (req.files.licenseImage?.[0]) {
-                    userData.licenseImage = await uploadToImgBB(req.files.licenseImage[0].buffer);
+
+                    userData.licenseImage = await uploadToImgBB(
+                        req.files.licenseImage[0].buffer
+                    );
                 }
-            } catch (imgErr) {
-                console.log("Image upload failed:", imgErr.message);
+
+            } catch (imgError) {
+
+                console.log('Image Upload Error:', imgError.message);
             }
         }
 
-        // ✅ 6. منطق الأدوار
+        //////////////////////////////////////////////////
+        // Driver Availability
+        //////////////////////////////////////////////////
+
         if (finalRole === 'Driver') {
-            delete userData.businessName;
+
+            userData.businessName = '';
 
             if (availability) {
+
                 try {
-                    userData.availability =
+
+                    const parsedAvailability =
                         typeof availability === 'string'
                             ? JSON.parse(availability)
                             : availability;
-                } catch (e) {
+
+                    const availabilityDoc =
+                        await Availability.create({
+
+                            timeSlot:
+                                parsedAvailability.timeSlot || "",
+
+                            customTime:
+                                parsedAvailability.customTime || "",
+
+                            days:
+                                parsedAvailability.days || [],
+
+                            frequency:
+                                parsedAvailability.frequency || ""
+                        });
+
+                    userData.availability =
+                        availabilityDoc._id;
+
+                } catch (error) {
+
                     return res.status(400).json({
                         success: false,
                         message: 'Invalid availability format'
                     });
                 }
             }
+
         } else {
-            userData.businessName = businessName || username;
+
+            userData.businessName =
+                businessName || username;
         }
 
-        // ✅ 7. إنشاء المستخدم
+        //////////////////////////////////////////////////
+        // Create User
+        //////////////////////////////////////////////////
+
         const newUser = await User.create(userData);
+
+        //////////////////////////////////////////////////
+        // Response
+        //////////////////////////////////////////////////
 
         return res.status(201).json({
             success: true,
@@ -136,26 +253,9 @@ router.post('/register', uploadFields, async (req, res) => {
         });
 
     } catch (error) {
-        console.error("🔥 REGISTER ERROR FULL:", error);
 
-        // ✅ Mongo duplicate error
-        if (error.code === 11000) {
-            return res.status(400).json({
-                success: false,
-                message: 'Email already exists (duplicate key)'
-            });
-        }
+        console.log('REGISTER ERROR:', error);
 
-        // ✅ Validation error
-        if (error.name === 'ValidationError') {
-            return res.status(400).json({
-                success: false,
-                message: 'Validation failed',
-                details: error.message
-            });
-        }
-
-        // ✅ أي خطأ غير معروف
         return res.status(500).json({
             success: false,
             message: 'Internal server error',
@@ -165,62 +265,83 @@ router.post('/register', uploadFields, async (req, res) => {
 });
 
 //////////////////////////////////////////////////
-// 🔐 LOGIN
+// LOGIN
 //////////////////////////////////////////////////
+
 router.post('/login', async (req, res) => {
+
     try {
 
         const { email, password } = req.body;
 
-        // التحقق من البيانات
+        //////////////////////////////////////////////////
+        // Validate
+        //////////////////////////////////////////////////
+
         if (!email || !password) {
+
             return res.status(400).json({
                 success: false,
                 message: 'Email and password are required'
             });
         }
 
-        // البحث عن المستخدم
+        //////////////////////////////////////////////////
+        // Find User
+        //////////////////////////////////////////////////
+
         const user = await User.findOne({
             email: email.toLowerCase().trim()
-        }).select('+password');
+        })
+        .select('+password')
+        .populate('availability');
 
-        // لو المستخدم مش موجود
         if (!user) {
+
             return res.status(400).json({
                 success: false,
                 message: 'Email not found'
             });
         }
 
-        // مقارنة الباسورد
+        //////////////////////////////////////////////////
+        // Compare Password
+        //////////////////////////////////////////////////
+
         const isMatch = await bcrypt.compare(
             password,
             user.password
         );
 
-        // لو الباسورد غلط
         if (!isMatch) {
+
             return res.status(400).json({
                 success: false,
                 message: 'Wrong password'
             });
         }
 
-        // حذف الباسورد قبل الإرسال
+        //////////////////////////////////////////////////
+        // Remove Password
+        //////////////////////////////////////////////////
+
         const userObj = user.toObject();
+
         delete userObj.password;
 
-        // نجاح
+        //////////////////////////////////////////////////
+        // Success
+        //////////////////////////////////////////////////
+
         return res.status(200).json({
             success: true,
-            message: 'Login successful',
+            message: 'Login successful ✅',
             user: userObj
         });
 
     } catch (error) {
 
-        console.log("LOGIN ERROR:", error);
+        console.log('LOGIN ERROR:', error);
 
         return res.status(500).json({
             success: false,

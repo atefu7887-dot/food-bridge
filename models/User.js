@@ -1,40 +1,5 @@
 const mongoose = require('mongoose');
-
-//////////////////////////////////////////////////
-// Availability Schema
-//////////////////////////////////////////////////
-
-const availabilitySchema = new mongoose.Schema(
-{
-    timeSlot: {
-        type: String,
-        default: ""
-    },
-
-    customTime: {
-        type: String,
-        default: ""
-    },
-
-    days: [
-        {
-            type: String
-        }
-    ],
-
-    frequency: {
-        type: String,
-        default: ""
-    }
-
-},
-{
-    _id: false
-});
-
-//////////////////////////////////////////////////
-// User Schema
-//////////////////////////////////////////////////
+const Availability = require('./Availability');
 
 const userSchema = new mongoose.Schema({
 
@@ -106,18 +71,15 @@ const userSchema = new mongoose.Schema({
     },
 
     availability: {
-        type: availabilitySchema,
-        default: () => ({})
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Availability',
+        default: null
     }
 
 },
 {
     timestamps: true
 });
-
-//////////////////////////////////////////////////
-// Middleware
-//////////////////////////////////////////////////
 
 userSchema.pre('save', function () {
 
@@ -127,7 +89,7 @@ userSchema.pre('save', function () {
     }
 
     if (this.role === 'Receiver') {
-        this.receiverType = 'Receiver';
+        this.receiverType = '';
         this.donorType = '';
     }
 
@@ -137,10 +99,6 @@ userSchema.pre('save', function () {
 
 });
 
-//////////////////////////////////////////////////
-// Remove Password From Response
-//////////////////////////////////////////////////
-
 userSchema.methods.toJSON = function () {
 
     const obj = this.toObject();
@@ -149,9 +107,5 @@ userSchema.methods.toJSON = function () {
 
     return obj;
 };
-
-//////////////////////////////////////////////////
-// Export Model
-//////////////////////////////////////////////////
 
 module.exports = mongoose.model('User', userSchema);
