@@ -72,256 +72,235 @@ async function uploadToImgBB(buffer) {
 //////////////////////////////////////////////////
 
 router.post(
-    '/register',
+  '/register',
 
-    (req, res, next) => {
+  (req, res, next) => {
+    uploadFields(req, res, function (err) {
 
-        uploadFields(req, res, function (err) {
-
-            if (err) {
-
-                return res.status(400).json({
-                    success: false,
-                    message: err.message
-                });
-            }
-
-            next();
+      if (err) {
+        return res.status(400).json({
+          success: false,
+          message: err.message
         });
-    },
+      }
 
-    async (req, res) => {
+      next();
+    });
+  },
+
+  async (req, res) => {
+
+    try {
+
+      const {
+        username,
+        email,
+        phone,
+        password,
+        role,
+        businessName,
+        address,
+        availability
+      } = req.body;
+
+      //////////////////////////////////////////////////
+      // VALIDATION
+      //////////////////////////////////////////////////
+
+      if (
+        !username ||
+        !email ||
+        !phone ||
+        !password ||
+        !role
+      ) {
+
+        return res.status(400).json({
+          success: false,
+          message: 'Missing required fields'
+        });
+      }
+
+      //////////////////////////////////////////////////
+      // ROLE
+      //////////////////////////////////////////////////
+
+      const roleMap = {
+        donor: 'Donor',
+        receiver: 'Receiver',
+        driver: 'Driver'
+      };
+
+      const finalRole =
+        roleMap[role.toLowerCase()] || role;
+
+      //////////////////////////////////////////////////
+      // CHECK EMAIL
+      //////////////////////////////////////////////////
+
+      const existingUser =
+        await User.findOne({
+          email: email.toLowerCase().trim()
+        });
+
+      if (existingUser) {
+
+        return res.status(400).json({
+          success: false,
+          message: 'Email already exists'
+        });
+      }
+
+      //////////////////////////////////////////////////
+      // HASH PASSWORD
+      //////////////////////////////////////////////////
+
+      const hashedPassword =
+        await bcrypt.hash(password, 10);
+
+      //////////////////////////////////////////////////
+      // USER DATA
+      //////////////////////////////////////////////////
+
+      let userData = {
+
+        username: username.trim(),
+
+        email: email.toLowerCase().trim(),
+
+        phone: phone.trim(),
+
+        password: hashedPassword,
+
+        role: finalRole,
+
+        address: address || "",
+
+        businessName:
+          finalRole === 'Driver'
+            ? ''
+            : (businessName
+                ? businessName.trim()
+                : ""),
+
+        avatar: "",
+
+        licenseImage: "",
+
+        availability: null
+      };
+
+      //////////////////////////////////////////////////
+      // UPLOAD IMAGES
+      //////////////////////////////////////////////////
+
+      if (req.files) {
+
+        if (req.files.avatar?.[0]) {
+
+          userData.avatar =
+            await uploadToImgBB(
+              req.files.avatar[0].buffer
+            );
+        }
+
+        if (req.files.licenseImage?.[0]) {
+
+          userData.licenseImage =
+            await uploadToImgBB(
+              req.files.licenseImage[0].buffer
+            );
+        }
+      }
+
+      //////////////////////////////////////////////////
+      // DRIVER AVAILABILITY
+      //////////////////////////////////////////////////
+
+      if (
+        finalRole === 'Driver' &&
+        availability
+      ) {
 
         try {
 
-            const {
-                username,
-                email,
-                phone,
-                password,
-                role,
-                businessName,
-                address,
-                availability
-            } = req.body;
+          const parsedAvailability =
+            typeof availability === 'string'
+              ? JSON.parse(availability)
+              : availability;
 
-            //////////////////////////////////////////////////
-            // VALIDATION
-            //////////////////////////////////////////////////
+          const availabilityDoc =
+            await Availability.create({
 
-            if (
-                !username ||
-                !email ||
-                !phone ||
-                !password ||
-                !role
-            ) {
+              timeSlot:
+                parsedAvailability.timeSlot || "",
 
-                return res.status(400).json({
-                    success: false,
-                    message: 'Missing required fields'
-                });
-            }
+              customTime:
+                parsedAvailability.customTime || "",
 
-            //////////////////////////////////////////////////
-            // ROLE
-            //////////////////////////////////////////////////
+              days:
+                parsedAvailability.days || [],
 
-            const roleMap = {
-                donor: 'Donor',
-                receiver: 'Receiver',
-                driver: 'Driver'
-            };
-
-            const finalRole =
-                roleMap[
-                    role.toLowerCase()
-                ] || role;
-
-            //////////////////////////////////////////////////
-            // CHECK EMAIL
-            //////////////////////////////////////////////////
-
-            const existingUser =
-                await User.findOne({
-                    email:
-                        email
-                            .toLowerCase()
-                            .trim()
-                });
-
-            if (existingUser) {
-
-                return res.status(400).json({
-                    success: false,
-                    message:
-                        'Email already exists'
-                });
-            }
-
-            //////////////////////////////////////////////////
-            // HASH PASSWORD
-            //////////////////////////////////////////////////
-
-            const hashedPassword =
-                await bcrypt.hash(
-                    password,
-                    10
-                );
-
-            //////////////////////////////////////////////////
-            // USER DATA
-            //////////////////////////////////////////////////
-
-            let userData = {
-
-                username:
-                    username.trim(),
-
-                email:
-                    email
-                        .toLowerCase()
-                        .trim(),
-
-                phone:
-                    phone.trim(),
-
-                password:
-                    hashedPassword,
-
-                role:
-                    finalRole,
-
-                address:
-                    address || "",
-
-              businessName: finalRole === 'Driver' ? '' : (businessName ? businessName.trim() : ""),
-
-                avatar: "",
-
-                licenseImage: "",
-
-                availability: null
-            };
-
-            //////////////////////////////////////////////////
-            // UPLOAD IMAGES
-            //////////////////////////////////////////////////
-
-            if (req.files) {
-
-                if (
-                    req.files.avatar?.[0]
-                ) {
-
-                    userData.avatar =
-                        await uploadToImgBB(
-                            req.files.avatar[0]
-                                .buffer
-                        );
-                }
-
-                if (
-                    req.files
-                        .licenseImage?.[0]
-                ) {
-
-                    userData.licenseImage =
-                        await uploadToImgBB(
-                            req.files
-                                .licenseImage[0]
-                                .buffer
-                        );
-                }
-            }
-
-            //////////////////////////////////////////////////
-            // DRIVER AVAILABILITY
-            //////////////////////////////////////////////////
-
-            if (
-                finalRole === 'Driver' &&
-                availability
-            ) {
-
-                try {
-
-                    const parsedAvailability =
-                        typeof availability ===
-                        'string'
-                            ? JSON.parse(
-                                  availability
-                              )
-                            : availability;
-
-                    const availabilityDoc =
-                        await Availability.create({
-                            timeSlot:
-                                parsedAvailability.timeSlot ||
-                                "",
-
-                            customTime:
-                                parsedAvailability.customTime ||
-                                "",
-
-                            days:
-                                parsedAvailability.days ||
-                                [],
-
-                            frequency:
-                                parsedAvailability.frequency ||
-                                ""
-                        });
-
-                    userData.availability =
-                        availabilityDoc._id;
-
-                } catch (err) {
-
-                    return res.status(400).json({
-                        success: false,
-                        message:
-                            'Invalid availability format'
-                    });
-                }
-            }
-
-            //////////////////////////////////////////////////
-            // CREATE USER
-            //////////////////////////////////////////////////
-
-            const newUser =
-                await User.create(
-                    userData
-                );
-
-            //////////////////////////////////////////////////
-            // RESPONSE
-            //////////////////////////////////////////////////
-
-            return res.status(201).json({
-                success: true,
-                message:
-                    'User created successfully 🎉',
-                user: newUser
+              frequency:
+                parsedAvailability.frequency || ""
             });
 
-        } catch (error) {
+          userData.availability =
+            availabilityDoc._id;
 
-            console.log(
-                "REGISTER ERROR:",
-                error
-            );
+        } catch (err) {
 
-            return res.status(500).json({
-                success: false,
-                message:
-                    'Internal server error',
-                error:
-                    error.message
-            });
+          console.log(
+            "AVAILABILITY ERROR:",
+            err
+          );
+
+          return res.status(400).json({
+            success: false,
+            message: 'Invalid availability format'
+          });
         }
+      }
+
+      //////////////////////////////////////////////////
+      // CREATE USER
+      //////////////////////////////////////////////////
+
+      const createdUser =
+        await User.create(userData);
+
+      //////////////////////////////////////////////////
+      // GET USER WITH POPULATE
+      //////////////////////////////////////////////////
+
+      const newUser =
+        await User.findById(createdUser._id)
+          .populate('availability');
+
+      //////////////////////////////////////////////////
+      // RESPONSE
+      //////////////////////////////////////////////////
+
+      return res.status(201).json({
+        success: true,
+        message: 'User created successfully 🎉',
+        user: newUser
+      });
+
+    } catch (error) {
+
+      console.log(
+        "REGISTER ERROR:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message: 'Internal server error',
+        error: error.message
+      });
     }
+  }
 );
 
 //////////////////////////////////////////////////
