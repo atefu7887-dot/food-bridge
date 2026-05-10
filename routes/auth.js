@@ -73,19 +73,27 @@ async function uploadToImgBB(buffer) {
 
 router.post(
     '/register',
+
     (req, res, next) => {
+
         uploadFields(req, res, function (err) {
+
             if (err) {
+
                 return res.status(400).json({
                     success: false,
                     message: err.message
                 });
             }
+
             next();
         });
     },
+
     async (req, res) => {
+
         try {
+
             const {
                 username,
                 email,
@@ -94,107 +102,223 @@ router.post(
                 role,
                 businessName,
                 address,
-                availability // تأتي غالباً كـ String من الموبايل
+                availability
             } = req.body;
 
-            // 1. التحقق من الحقول الأساسية
-            if (!username || !email || !phone || !password || !role) {
+            //////////////////////////////////////////////////
+            // VALIDATION
+            //////////////////////////////////////////////////
+
+            if (
+                !username ||
+                !email ||
+                !phone ||
+                !password ||
+                !role
+            ) {
+
                 return res.status(400).json({
                     success: false,
                     message: 'Missing required fields'
                 });
             }
 
-            // 2. توحيد مسمى الدور (Role)
-            const roleMap = { donor: 'Donor', receiver: 'Receiver', driver: 'Driver' };
-            const finalRole = roleMap[role.toLowerCase()] || role;
+            //////////////////////////////////////////////////
+            // ROLE
+            //////////////////////////////////////////////////
 
-            // 3. التحقق من وجود البريد الإلكتروني مسبقاً
-            const existingUser = await User.findOne({ email: email.toLowerCase().trim() });
+            const roleMap = {
+                donor: 'Donor',
+                receiver: 'Receiver',
+                driver: 'Driver'
+            };
+
+            const finalRole =
+                roleMap[
+                    role.toLowerCase()
+                ] || role;
+
+            //////////////////////////////////////////////////
+            // CHECK EMAIL
+            //////////////////////////////////////////////////
+
+            const existingUser =
+                await User.findOne({
+                    email:
+                        email
+                            .toLowerCase()
+                            .trim()
+                });
+
             if (existingUser) {
+
                 return res.status(400).json({
                     success: false,
-                    message: 'Email already exists'
+                    message:
+                        'Email already exists'
                 });
             }
 
-            // 4. تشفير كلمة المرور
-            const hashedPassword = await bcrypt.hash(password, 10);
+            //////////////////////////////////////////////////
+            // HASH PASSWORD
+            //////////////////////////////////////////////////
 
-            // 5. تجهيز بيانات المستخدم
+            const hashedPassword =
+                await bcrypt.hash(
+                    password,
+                    10
+                );
+
+            //////////////////////////////////////////////////
+            // USER DATA
+            //////////////////////////////////////////////////
+
             let userData = {
-                username: username.trim(),
-                email: email.toLowerCase().trim(),
-                phone: phone.trim(),
-                password: hashedPassword,
-                role: finalRole,
-                address: address || "",
-                businessName: finalRole === 'Driver' ? '' : (businessName ? businessName.trim() : ""),
+
+                username:
+                    username.trim(),
+
+                email:
+                    email
+                        .toLowerCase()
+                        .trim(),
+
+                phone:
+                    phone.trim(),
+
+                password:
+                    hashedPassword,
+
+                role:
+                    finalRole,
+
+                address:
+                    address || "",
+
+              businessName: finalRole === 'Driver' ? '' : (businessName ? businessName.trim() : ""),
+
                 avatar: "",
+
                 licenseImage: "",
+
                 availability: null
             };
 
-            // 6. رفع الصور إن وجدت
+            //////////////////////////////////////////////////
+            // UPLOAD IMAGES
+            //////////////////////////////////////////////////
+
             if (req.files) {
-                if (req.files.avatar?.[0]) {
-                    userData.avatar = await uploadToImgBB(req.files.avatar[0].buffer);
+
+                if (
+                    req.files.avatar?.[0]
+                ) {
+
+                    userData.avatar =
+                        await uploadToImgBB(
+                            req.files.avatar[0]
+                                .buffer
+                        );
                 }
-                if (req.files.licenseImage?.[0]) {
-                    userData.licenseImage = await uploadToImgBB(req.files.licenseImage[0].buffer);
+
+                if (
+                    req.files
+                        .licenseImage?.[0]
+                ) {
+
+                    userData.licenseImage =
+                        await uploadToImgBB(
+                            req.files
+                                .licenseImage[0]
+                                .buffer
+                        );
                 }
             }
 
-            // 7. معالجة الـ Availability للسائق (الإصلاح الجذري هنا)
-            if (finalRole === 'Driver' && availability) {
+            //////////////////////////////////////////////////
+            // DRIVER AVAILABILITY
+            //////////////////////////////////////////////////
+
+            if (
+                finalRole === 'Driver' &&
+                availability
+            ) {
+
                 try {
-                    let parsedAvailability;
-                    
-                    // إذا كانت البيانات نصية (JSON String) نقوم بتحويلها
-                    if (typeof availability === 'string') {
-                        parsedAvailability = JSON.parse(availability);
-                    } else {
-                        parsedAvailability = availability;
-                    }
 
-                    // التأكد من أن الأيام مصفوفة حتى لو أُرسلت بشكل خاطئ
-                    const daysArray = Array.isArray(parsedAvailability.days) 
-                                      ? parsedAvailability.days 
-                                      : (parsedAvailability.days ? [parsedAvailability.days] : []);
+                    const parsedAvailability =
+                        typeof availability ===
+                        'string'
+                            ? JSON.parse(
+                                  availability
+                              )
+                            : availability;
 
-                    const availabilityDoc = await Availability.create({
-                        timeSlot: parsedAvailability.timeSlot || "",
-                        customTime: parsedAvailability.customTime || "",
-                        days: daysArray,
-                        frequency: parsedAvailability.frequency || ""
-                    });
+                    const availabilityDoc =
+                        await Availability.create({
+                            timeSlot:
+                                parsedAvailability.timeSlot ||
+                                "",
 
-                    userData.availability = availabilityDoc._id;
-                } catch (parseError) {
-                    console.log("AVAILABILITY PARSE ERROR:", parseError.message);
-                    // لا نوقف عملية التسجيل بالكامل، فقط نسجل الخطأ أو نعيد رد للمستخدم
+                            customTime:
+                                parsedAvailability.customTime ||
+                                "",
+
+                            days:
+                                parsedAvailability.days ||
+                                [],
+
+                            frequency:
+                                parsedAvailability.frequency ||
+                                ""
+                        });
+
+                    userData.availability =
+                        availabilityDoc._id;
+
+                } catch (err) {
+
                     return res.status(400).json({
                         success: false,
-                        message: 'Invalid availability format. Please send as valid JSON.'
+                        message:
+                            'Invalid availability format'
                     });
                 }
             }
 
-            // 8. إنشاء المستخدم
-            const newUser = await User.create(userData);
+            //////////////////////////////////////////////////
+            // CREATE USER
+            //////////////////////////////////////////////////
+
+            const newUser =
+                await User.create(
+                    userData
+                );
+
+            //////////////////////////////////////////////////
+            // RESPONSE
+            //////////////////////////////////////////////////
 
             return res.status(201).json({
                 success: true,
-                message: 'User created successfully 🎉',
+                message:
+                    'User created successfully 🎉',
                 user: newUser
             });
 
         } catch (error) {
-            console.log("REGISTER ERROR:", error);
+
+            console.log(
+                "REGISTER ERROR:",
+                error
+            );
+
             return res.status(500).json({
-                success: true,
-                message: 'Internal server error',
-                error: error.message
+                success: false,
+                message:
+                    'Internal server error',
+                error:
+                    error.message
             });
         }
     }
