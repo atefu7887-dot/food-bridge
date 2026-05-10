@@ -71,57 +71,33 @@ async function uploadToImgBB(buffer) {
 // REGISTER
 //////////////////////////////////////////////////
 
-router.post(
-    '/register',
+router.post('/register', 
     (req, res, next) => {
         uploadFields(req, res, function (err) {
-            if (err) {
-                return res.status(400).json({
-                    success: false,
-                    message: err.message
-                });
-            }
+            if (err) return res.status(400).json({ success: false, message: err.message });
             next();
         });
     },
     async (req, res) => {
         try {
-            const {
-                username,
-                email,
-                phone,
-                password,
-                role,
-                businessName,
-                address,
-                availability // تأتي غالباً كـ String من الموبايل
-            } = req.body;
+            const { username, email, phone, password, role, businessName, address, availability } = req.body;
 
-            // 1. التحقق من الحقول الأساسية
+            // 1. فحص الحقول الأساسية
             if (!username || !email || !phone || !password || !role) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Missing required fields'
-                });
+                return res.status(400).json({ success: false, message: 'Missing required fields' });
             }
 
-            // 2. توحيد مسمى الدور (Role)
+            // 2. التحقق من البريد
+            const existingUser = await User.findOne({ email: email.toLowerCase().trim() });
+            if (existingUser) return res.status(400).json({ success: false, message: 'Email already exists' });
+
+            // 3. تشفير كلمة المرور
+            const hashedPassword = await bcrypt.hash(password, 10);
+
+            // 4. تجهيز كائن المستخدم
             const roleMap = { donor: 'Donor', receiver: 'Receiver', driver: 'Driver' };
             const finalRole = roleMap[role.toLowerCase()] || role;
 
-            // 3. التحقق من وجود البريد الإلكتروني مسبقاً
-            const existingUser = await User.findOne({ email: email.toLowerCase().trim() });
-            if (existingUser) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Email already exists'
-                });
-            }
-
-            // 4. تشفير كلمة المرور
-            const hashedPassword = await bcrypt.hash(password, 10);
-
-            // 5. تجهيز بيانات المستخدم
             let userData = {
                 username: username.trim(),
                 email: email.toLowerCase().trim(),
@@ -129,77 +105,51 @@ router.post(
                 password: hashedPassword,
                 role: finalRole,
                 address: address || "",
-                businessName: finalRole === 'Driver' ? '' : (businessName ? businessName.trim() : ""),
+                businessName: finalRole === 'Driver' ? '' : (businessName || ""),
                 avatar: "",
                 licenseImage: "",
                 availability: null
             };
 
-            // 6. رفع الصور إن وجدت
+            // 5. رفع الصور
             if (req.files) {
-                if (req.files.avatar?.[0]) {
-                    userData.avatar = await uploadToImgBB(req.files.avatar[0].buffer);
-                }
-                if (req.files.licenseImage?.[0]) {
-                    userData.licenseImage = await uploadToImgBB(req.files.licenseImage[0].buffer);
-                }
+                if (req.files.avatar?.[0]) userData.avatar = await uploadToImgBB(req.files.avatar[0].buffer);
+                if (req.files.licenseImage?.[0]) userData.licenseImage = await uploadToImgBB(req.files.licenseImage[0].buffer);
             }
 
-            // 7. معالجة الـ Availability للسائق (الإصلاح الجذري هنا)
+            // 6. معالجة الـ Availability (الإصلاح هنا)
             if (finalRole === 'Driver' && availability) {
                 try {
-                    let parsedAvailability;
+                    let parsed = (typeof availability === 'string') ? JSON.parse(availability) : availability;
                     
-                    // إذا كانت البيانات نصية (JSON String) نقوم بتحويلها
-                    if (typeof availability === 'string') {
-                        parsedAvailability = JSON.parse(availability);
-                    } else {
-                        parsedAvailability = availability;
-                    }
-
-                    // التأكد من أن الأيام مصفوفة حتى لو أُرسلت بشكل خاطئ
-                    const daysArray = Array.isArray(parsedAvailability.days) 
-                                      ? parsedAvailability.days 
-                                      : (parsedAvailability.days ? [parsedAvailability.days] : []);
-
                     const availabilityDoc = await Availability.create({
-                        timeSlot: parsedAvailability.timeSlot || "",
-                        customTime: parsedAvailability.customTime || "",
-                        days: daysArray,
-                        frequency: parsedAvailability.frequency || ""
+                        timeSlot: parsed.timeSlot || "",
+                        customTime: parsed.customTime || "",
+                        days: Array.isArray(parsed.days) ? parsed.days : [],
+                        frequency: parsed.frequency || ""
                     });
-
                     userData.availability = availabilityDoc._id;
-                } catch (parseError) {
-                    console.log("AVAILABILITY PARSE ERROR:", parseError.message);
-                    // لا نوقف عملية التسجيل بالكامل، فقط نسجل الخطأ أو نعيد رد للمستخدم
-                    return res.status(400).json({
-                        success: false,
-                        message: 'Invalid availability format. Please send as valid JSON.'
-                    });
+                } catch (e) {
+                    console.error("Availability Error:", e.message);
+                    // نكمل التسجيل حتى لو فشل الـ availability أو نرجع خطأ حسب رغبتك
                 }
             }
 
-            // 8. إنشاء المستخدم
+            // 7. إنشاء الحساب
             const newUser = await User.create(userData);
 
-            return res.status(201).json({
+            res.status(201).json({
                 success: true,
                 message: 'User created successfully 🎉',
                 user: newUser
             });
 
         } catch (error) {
-            console.log("REGISTER ERROR:", error);
-            return res.status(500).json({
-                success: true,
-                message: 'Internal server error',
-                error: error.message
-            });
+            console.error("REGISTER ERROR:", error);
+            res.status(500).json({ success: false, message: 'Server Error', error: error.message });
         }
     }
 );
-
 //////////////////////////////////////////////////
 // LOGIN
 //////////////////////////////////////////////////
