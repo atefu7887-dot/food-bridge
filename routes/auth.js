@@ -419,4 +419,83 @@ router.post(
     }
 );
 
+//////////////////////////////////////////////////
+// UPDATE PROFILE
+//////////////////////////////////////////////////
+
+router.put(
+    '/update-profile/:id', // نستخدم PUT للتعديل ونرسل معرف المستخدم في الرابط
+    (req, res, next) => {
+        uploadFields(req, res, function (err) {
+            if (err) {
+                return res.status(400).json({
+                    success: false,
+                    message: err.message
+                });
+            }
+            next();
+        });
+    },
+    async (req, res) => {
+        try {
+            const userId = req.params.id;
+            const {
+                username,
+                phone,
+                businessName,
+                address,
+                role // عادة لا يتغير الدور ولكن نضعه للاحتياط
+            } = req.body;
+
+            // 1. البحث عن المستخدم الحالي
+            let user = await User.findById(userId);
+            if (!user) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'User not found'
+                });
+            }
+
+            // 2. تجهيز البيانات الجديدة للتحديث
+            let updateData = {
+                username: username ? username.trim() : user.username,
+                phone: phone ? phone.trim() : user.phone,
+                address: address || user.address,
+                businessName: user.role === 'Driver' ? '' : (businessName ? businessName.trim() : user.businessName)
+            };
+
+            // 3. تحديث الصور إذا تم رفع ملفات جديدة
+            if (req.files) {
+                if (req.files.avatar?.[0]) {
+                    updateData.avatar = await uploadToImgBB(req.files.avatar[0].buffer);
+                }
+                if (req.files.licenseImage?.[0]) {
+                    updateData.licenseImage = await uploadToImgBB(req.files.licenseImage[0].buffer);
+                }
+            }
+
+            // 4. تنفيذ التحديث في قاعدة البيانات
+            const updatedUser = await User.findByIdAndUpdate(
+                userId,
+                { $set: updateData },
+                { new: true, runValidators: true } // new: true ليرجع البيانات بعد التعديل
+            ).populate('availability');
+
+            return res.status(200).json({
+                success: true,
+                message: 'Profile updated successfully ✅',
+                user: updatedUser
+            });
+
+        } catch (error) {
+            console.log("UPDATE ERROR:", error);
+            return res.status(500).json({
+                success: false,
+                message: 'Error updating profile',
+                error: error.message
+            });
+        }
+    }
+);
+
 module.exports = router;
