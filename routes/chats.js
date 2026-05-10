@@ -20,9 +20,9 @@ router.post('/access', async (req, res) => {
       });
     }
 
-    donationId = donationId.toString();
-    senderId = senderId.toString();
-    receiverId = receiverId.toString();
+    donationId = donationId.toString().trim();
+    senderId = senderId.toString().trim();
+    receiverId = receiverId.toString().trim();
 
     if (
       !mongoose.Types.ObjectId.isValid(donationId) ||
@@ -35,10 +35,10 @@ router.post('/access', async (req, res) => {
       });
     }
 
-    // ترتيب المعرفات لمنع التكرار وضمان ربط دائم لنفس الطرفين
+    // ترتيب المعرفات أبجدياً لضمان البحث والإنشاء بنفس الترتيب دائماً
     const participants = [senderId, receiverId].sort();
 
-    // البحث عن غرفة تجمع هذين الشخصين بخصوص هذا التبرع
+    // البحث عن غرفة تجمع الطرفين المحددين بالذات بخصوص هذا التبرع (مثال: الجمعية + السائق)
     let chat = await Chat.findOne({
       donation: donationId,
       participants: {
@@ -49,16 +49,33 @@ router.post('/access', async (req, res) => {
       .populate('participants', 'username phone avatar role')
       .populate('donation', 'title status');
 
-    // إذا لم تكن موجودة، نقوم بإنشائها
+    // إذا لم تكن موجودة، نقوم بإنشائها فوراً
     if (!chat) {
-      const createdChat = await Chat.create({
-        donation: donationId,
-        participants: participants,
-      });
+      try {
+        const createdChat = await Chat.create({
+          donation: donationId,
+          participants: participants,
+        });
 
-      chat = await Chat.findById(createdChat._id)
-        .populate('participants', 'username phone avatar role')
-        .populate('donation', 'title status');
+        chat = await Chat.findById(createdChat._id)
+          .populate('participants', 'username phone avatar role')
+          .populate('donation', 'title status');
+      } catch (dbError) {
+        // إذا حدث تعارض متزامن بسبب الـ unique index، نقوم بجلب الغرفة القائمة فوراً
+        if (dbError.code === 11000) {
+          chat = await Chat.findOne({
+            donation: donationId,
+            participants: {
+              $all: participants,
+              $size: 2,
+            },
+          })
+            .populate('participants', 'username phone avatar role')
+            .populate('donation', 'title status');
+        } else {
+          throw dbError;
+        }
+      }
     }
 
     return res.status(200).json({
@@ -68,16 +85,9 @@ router.post('/access', async (req, res) => {
 
   } catch (error) {
     console.log('ACCESS CHAT ERROR =>', error);
-
-    if (error.code === 11000) {
-      return res.status(200).json({
-        success: true,
-        message: 'Chat already exists',
-      });
-    }
-
     return res.status(500).json({
       success: false,
+      message: 'Server error processing chat access',
       error: error.message,
     });
   }
