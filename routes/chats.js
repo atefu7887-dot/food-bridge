@@ -46,7 +46,7 @@ router.post('/access', async (req, res) => {
     receiverId = receiverId.toString();
 
     //////////////////////////////////////////////////
-    // CHECK OBJECT IDS
+    // CHECK OBJECT IDs
     //////////////////////////////////////////////////
 
     if (
@@ -57,29 +57,12 @@ router.post('/access', async (req, res) => {
 
       return res.status(400).json({
         success: false,
-        message: 'Invalid ids',
+        message: 'Invalid Object ID(s) provided',
       });
     }
 
     //////////////////////////////////////////////////
-    // CHECK DONATION
-    //////////////////////////////////////////////////
-
-    const donation = await Donation.findById(
-      donationId,
-    );
-
-    if (!donation) {
-
-      return res.status(404).json({
-        success: false,
-        message: 'Donation not found',
-      });
-    }
-
-    //////////////////////////////////////////////////
-    // SORT PARTICIPANTS
-    // مهم جداً لمنع duplicate key
+    // PREPARE PARTICIPANTS
     //////////////////////////////////////////////////
 
     const participants = [
@@ -93,8 +76,10 @@ router.post('/access', async (req, res) => {
 
     let chat = await Chat.findOne({
       donation: donationId,
+
       participants: {
         $all: participants,
+
         $size: 2,
       },
     })
@@ -165,9 +150,91 @@ router.post('/access', async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: error.message,
+
+      error: error.message,
     });
   }
+});
+
+//////////////////////////////////////////////////
+// SEND MESSAGE (يستقبل الحقول المصححة بنجاح ✅)
+//////////////////////////////////////////////////
+
+router.post('/send', async (req, res) => {
+    try {
+        const { chatId, senderId, text } = req.body;
+
+        // التحقق من وصول المدخلات المطلوبة
+        if (!chatId || !senderId || !text) {
+            return res.status(400).json({ 
+                success: false, 
+                message: "Missing fields. Required: chatId, senderId, text" 
+            });
+        }
+
+        // 1. إنشاء الرسالة وحفظها
+        const newMessage = new Message({
+            chat: chatId,
+            sender: senderId,
+            text: text.trim()
+        });
+        await newMessage.save();
+
+        // عمل Populate لبيانات المرسل لترجع كاملة لتطبيق الهاتف
+        const populatedMessage = await Message.findById(newMessage._id)
+            .populate('sender', 'username avatar role');
+
+        // 2. تحديث آخر رسالة (lastMessage) في المحادثة لتسهيل العرض
+        await Chat.findByIdAndUpdate(chatId, {
+            lastMessage: {
+                text: text.trim(),
+                sender: senderId,
+                createdAt: new Date()
+            }
+        });
+
+        res.status(201).json({ success: true, message: populatedMessage });
+    } catch (error) {
+        console.log("SEND MESSAGE ERROR =>", error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+//////////////////////////////////////////////////
+// GET CHAT MESSAGES
+//////////////////////////////////////////////////
+
+router.get('/:chatId/messages', async (req, res) => {
+    try {
+        const { chatId } = req.params;
+
+        const messages = await Message.find({ chat: chatId })
+            .populate('sender', 'username avatar role')
+            .sort({ createdAt: 1 }); // ترتيب من الأقدم للأحدث ليظهر كتسلسل شات طبيعي
+        
+        res.status(200).json({ success: true, messages });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+//////////////////////////////////////////////////
+// GET MY CHATS
+//////////////////////////////////////////////////
+
+router.get('/my-chats/:userId', async (req, res) => {
+    try {
+        const chats = await Chat.find({
+            participants: req.params.userId
+        })
+        .populate('participants', 'username phone avatar role')
+        .populate('donation', 'title status')
+        .sort({ updatedAt: -1 }); // عرض أحدث المحادثات النشطة أولاً
+
+        res.status(200).json({ success: true, chats });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
 });
 
 module.exports = router;
