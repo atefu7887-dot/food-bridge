@@ -1,21 +1,39 @@
 const express = require('express');
 const router = express.Router();
+
 const Chat = require('../models/Chat');
 const Message = require('../models/Message');
 const Donation = require('../models/Donation');
 
-// 1. 🚪 مسار الدخول إلى المحادثة (إنشاء غرفة أو جلب الغرفة الحالية)
+//////////////////////////////////////////////////
+// ACCESS CHAT
+//////////////////////////////////////////////////
+
 router.post('/access', async (req, res) => {
     try {
-        const { donationId, senderId, receiverId } = req.body;
 
-        // التأكد من وجود طلب التبرع
-        const donation = await Donation.findById(donationId);
-        if (!donation) {
-            return res.status(404).json({ success: false, message: "Donation not found" });
+        const {
+            donationId,
+            senderId,
+            receiverId
+        } = req.body;
+
+        if (!donationId || !senderId || !receiverId) {
+            return res.status(400).json({
+                success: false,
+                message: 'Missing required fields'
+            });
         }
 
-        // البحث عن غرفة تجمع هذين الطرفين بخصوص هذا التبرع تحديداً
+        const donation = await Donation.findById(donationId);
+
+        if (!donation) {
+            return res.status(404).json({
+                success: false,
+                message: 'Donation not found'
+            });
+        }
+
         let chat = await Chat.findOne({
             donation: donationId,
             participants: { $all: [senderId, receiverId] }
@@ -23,90 +41,157 @@ router.post('/access', async (req, res) => {
         .populate('participants', 'username phone avatar role')
         .populate('donation', 'title status');
 
-        // إذا لم تكن هناك غرفة سابقة، نقوم بإنشائها فوراً
         if (!chat) {
-            chat = new Chat({
+
+            const createdChat = await Chat.create({
                 donation: donationId,
                 participants: [senderId, receiverId]
             });
-            await chat.save();
-            
-            // عمل populate للبيانات بعد الحفظ لتظهر كاملة للتطبيق
-            chat = await Chat.findById(chat._id)
+
+            chat = await Chat.findById(createdChat._id)
                 .populate('participants', 'username phone avatar role')
                 .populate('donation', 'title status');
         }
 
-        res.status(200).json({ success: true, chat });
+        return res.status(200).json({
+            success: true,
+            chat
+        });
+
     } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+
+        console.log("ACCESS CHAT ERROR:", error);
+
+        return res.status(500).json({
+            success: false,
+            error: error.message
+        });
     }
 });
 
-// 2. ✉️ مسار إرسال رسالة جديدة
-router.post('/send', async (req, res) => {
-    try {
-        const { chatId, senderId, text } = req.body;
+//////////////////////////////////////////////////
+// SEND MESSAGE
+//////////////////////////////////////////////////
 
-        // 1. حفظ الرسالة الجديدة في جدول الرسائل
-        const newMessage = new Message({
+router.post('/send', async (req, res) => {
+
+    try {
+
+        const {
+            chatId,
+            senderId,
+            text
+        } = req.body;
+
+        if (!chatId || !senderId || !text) {
+            return res.status(400).json({
+                success: false,
+                message: 'Missing required fields'
+            });
+        }
+
+        const chat = await Chat.findById(chatId);
+
+        if (!chat) {
+            return res.status(404).json({
+                success: false,
+                message: 'Chat not found'
+            });
+        }
+
+        const message = await Message.create({
             chat: chatId,
             sender: senderId,
-            text: text
+            text: text.trim()
         });
-        await newMessage.save();
 
-        // 2. تحديث حقل "آخر رسالة" في جدول الغرفة (Chat) لتحديث القائمة الرئيسية للمستخدمين
         await Chat.findByIdAndUpdate(chatId, {
             lastMessage: {
-                text: text,
+                text: text.trim(),
                 sender: senderId,
-                createdAt: Date.now()
+                createdAt: new Date()
             }
         });
 
-        // جلب الرسالة مع بيانات المرسل لإرسالها للتطبيق
-        const populatedMessage = await Message.findById(newMessage._id)
-            .populate('sender', 'username avatar');
-
-        res.status(201).json({ success: true, message: populatedMessage });
-    } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
-    }
-});
-
-// 3. 📜 مسار جلب جميع الرسائل داخل غرفة معينة
-router.get('/:chatId/messages', async (req, res) => {
-    try {
-        const { chatId } = req.params;
-
-        // جلب الرسائل مرتبة من الأقدم إلى الأحدث لعرضها بشكل منطقي في الشات
-        const messages = await Message.find({ chat: chatId })
+        const populatedMessage = await Message.findById(message._id)
             .populate('sender', 'username avatar role')
-            .sort({ createdAt: 1 });
+            .populate('chat');
 
-        // تحديث حالة الرسائل غير المقروءة إلى "مقروءة" (isRead: true) للرسائل التي لم يرسلها المستخدم الحالي
-        // (يمكنك عمل هذا التحديث بشكل أكثر دقة بناءً على من يفتح المحادثة)
-        
-        res.status(200).json({ success: true, messages });
+        return res.status(201).json({
+            success: true,
+            message: populatedMessage
+        });
+
     } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+
+        console.log("SEND MESSAGE ERROR:", error);
+
+        return res.status(500).json({
+            success: false,
+            error: error.message
+        });
     }
 });
 
-// 4. 🗂️ جلب قائمة كل المحادثات الخاصة بمستخدم معين (مهم لشاشة "محادثاتي")
-router.get('/my-chats/:userId', async (req, res) => {
+//////////////////////////////////////////////////
+// GET CHAT MESSAGES
+//////////////////////////////////////////////////
+
+router.get('/:chatId/messages', async (req, res) => {
+
     try {
+
+        const messages = await Message.find({
+            chat: req.params.chatId
+        })
+        .populate('sender', 'username avatar role')
+        .populate('chat')
+        .sort({ createdAt: 1 });
+
+        return res.status(200).json({
+            success: true,
+            messages
+        });
+
+    } catch (error) {
+
+        console.log("GET MESSAGES ERROR:", error);
+
+        return res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+//////////////////////////////////////////////////
+// GET MY CHATS
+//////////////////////////////////////////////////
+
+router.get('/my-chats/:userId', async (req, res) => {
+
+    try {
+
         const chats = await Chat.find({
             participants: req.params.userId
         })
         .populate('participants', 'username phone avatar role')
         .populate('donation', 'title status')
-        .sort({ 'lastMessage.createdAt': -1 }); // ترتيب الغرف حسب آخر رسالة وصلت
+        .sort({ updatedAt: -1 });
 
-        res.status(200).json({ success: true, chats });
+        return res.status(200).json({
+            success: true,
+            chats
+        });
+
     } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+
+        console.log("MY CHATS ERROR:", error);
+
+        return res.status(500).json({
+            success: false,
+            error: error.message
+        });
     }
 });
 
