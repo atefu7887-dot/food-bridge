@@ -1,11 +1,40 @@
 const mongoose = require('mongoose');
 
-const availabilitySchema = new mongoose.Schema({
-    timeSlot: { type: String, default: "" },
-    customTime: { type: String, default: "" },
-    days: [{ type: String }],
-    frequency: { type: String, default: "" }
-}, { _id: false });
+//////////////////////////////////////////////////
+// Availability Schema
+//////////////////////////////////////////////////
+
+const availabilitySchema = new mongoose.Schema(
+{
+    timeSlot: {
+        type: String,
+        default: ""
+    },
+
+    customTime: {
+        type: String,
+        default: ""
+    },
+
+    days: [
+        {
+            type: String
+        }
+    ],
+
+    frequency: {
+        type: String,
+        default: ""
+    }
+
+},
+{
+    _id: false
+});
+
+//////////////////////////////////////////////////
+// User Schema
+//////////////////////////////////////////////////
 
 const userSchema = new mongoose.Schema({
 
@@ -81,13 +110,16 @@ const userSchema = new mongoose.Schema({
         default: () => ({})
     }
 
-}, {
+},
+{
     timestamps: true
 });
 
-
+//////////////////////////////////////////////////
 // Middleware
-userSchema.pre('save', function (next) {
+//////////////////////////////////////////////////
+
+userSchema.pre('save', function () {
 
     if (this.role === 'Donor') {
         this.donorType = 'Donor';
@@ -103,15 +135,23 @@ userSchema.pre('save', function (next) {
         this.businessName = '';
     }
 
-    next();
 });
 
+//////////////////////////////////////////////////
+// Remove Password From Response
+//////////////////////////////////////////////////
 
-// حذف الباسورد
 userSchema.methods.toJSON = function () {
+
     const obj = this.toObject();
+
     delete obj.password;
+
     return obj;
 };
+
+//////////////////////////////////////////////////
+// Export Model
+//////////////////////////////////////////////////
 
 module.exports = mongoose.model('User', userSchema);
