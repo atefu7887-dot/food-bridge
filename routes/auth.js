@@ -31,7 +31,7 @@ const uploadFields = upload.fields([
 
 async function uploadToImgBB(buffer) {
 
-    const apiKey = process.env.IMGBB_API_KEY;
+    const apiKey = e588c3e5bae57852fb441c6f15619cad;
 
     const formData = new FormData();
 
