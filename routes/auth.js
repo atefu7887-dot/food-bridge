@@ -171,7 +171,7 @@ router.post('/login', async (req, res) => {
     try {
         const { email, password } = req.body;
 
-        // ✅ تحقق من البيانات
+        // 1. تحقق من إرسال البيانات
         if (!email || !password) {
             return res.status(400).json({
                 success: false,
@@ -179,11 +179,12 @@ router.post('/login', async (req, res) => {
             });
         }
 
-        // ✅ مهم جدًا: نجيب الباسورد
+        // 2. البحث عن المستخدم وإجبار السيرفر على جلب الباسورد المحمي
+        // استخدمنا .select('+password') هنا لفك القفل عن حقل الباسورد
         const user = await User.findOne({ email: email.toLowerCase().trim() })
                                .select('+password');
 
-        // ✅ المستخدم غير موجود
+        // 3. إذا لم يوجد المستخدم
         if (!user) {
             return res.status(400).json({
                 success: false,
@@ -191,7 +192,8 @@ router.post('/login', async (req, res) => {
             });
         }
 
-        // ✅ مقارنة الباسورد
+        // 4. مقارنة كلمة المرور
+        // الآن user.password تحتوي على الهاش المشفر القادم من القاعدة
         const isMatch = await bcrypt.compare(password, user.password);
 
         if (!isMatch) {
@@ -201,19 +203,15 @@ router.post('/login', async (req, res) => {
             });
         }
 
-        // ✅ حذف الباسورد قبل الإرسال
-        const userData = user.toObject();
-        delete userData.password;
-
+        // 5. إرجاع بيانات المستخدم (الباسورد سيختفي تلقائياً بفضل toJSON)
         return res.status(200).json({
             success: true,
             message: "Login successful ✅",
-            user: userData
+            user: user // سيتم استدعاء user.toJSON() تلقائياً وحذف الباسورد
         });
 
     } catch (error) {
         console.error("🔥 LOGIN ERROR:", error);
-
         return res.status(500).json({
             success: false,
             message: "Internal server error",
