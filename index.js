@@ -2,7 +2,8 @@ const express = require('express');
 const mongoose = require('mongoose');
 const dotenv = require('dotenv');
 const cors = require('cors');
-
+app.use(express.json()); // لقراءة بيانات JSON المرسلة في Body
+app.use(express.urlencoded({ extended: true }))
 
 dotenv.config();
 const app = express();
