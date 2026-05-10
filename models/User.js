@@ -14,12 +14,11 @@ const userSchema = new mongoose.Schema({
         trim: true 
     },
 
-    email: { 
-        type: String, 
-        required: true, 
-        unique: true, 
+   email: {
+        type: String,
+        required: true,
+        unique: true,
         lowercase: true,
-        trim: true 
     },
 
     phone: { 
@@ -28,10 +27,9 @@ const userSchema = new mongoose.Schema({
         trim: true 
     },
 
-    password: { 
-        type: String, 
+    password: {
+        type: String,
         required: true,
-        select: false // 🔐 يمنع رجوع الباسورد
     },
 
     role: { 

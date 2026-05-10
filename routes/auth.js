@@ -168,23 +168,11 @@ router.post('/register', uploadFields, async (req, res) => {
 // 🔐 LOGIN
 //////////////////////////////////////////////////
 router.post('/login', async (req, res) => {
+    const { email, password } = req.body;
+
     try {
-        const { email, password } = req.body;
+        const user = await User.findOne({ email });
 
-        // 1. تحقق من إرسال البيانات
-        if (!email || !password) {
-            return res.status(400).json({
-                success: false,
-                message: "Email and password are required"
-            });
-        }
-
-        // 2. البحث عن المستخدم وإجبار السيرفر على جلب الباسورد المحمي
-        // استخدمنا .select('+password') هنا لفك القفل عن حقل الباسورد
-        const user = await User.findOne({ email: email.toLowerCase().trim() })
-                               .select('+password');
-
-        // 3. إذا لم يوجد المستخدم
         if (!user) {
             return res.status(400).json({
                 success: false,
@@ -192,8 +180,6 @@ router.post('/login', async (req, res) => {
             });
         }
 
-        // 4. مقارنة كلمة المرور
-        // الآن user.password تحتوي على الهاش المشفر القادم من القاعدة
         const isMatch = await bcrypt.compare(password, user.password);
 
         if (!isMatch) {
@@ -203,21 +189,20 @@ router.post('/login', async (req, res) => {
             });
         }
 
-        // 5. إرجاع بيانات المستخدم (الباسورد سيختفي تلقائياً بفضل toJSON)
-        return res.status(200).json({
+        res.status(200).json({
             success: true,
             message: "Login successful ✅",
-            user: user // سيتم استدعاء user.toJSON() تلقائياً وحذف الباسورد
+            user: user
         });
 
-    } catch (error) {
-        console.error("🔥 LOGIN ERROR:", error);
-        return res.status(500).json({
+    } catch (err) {
+        console.error("Login Error:", err);
+        res.status(500).json({
             success: false,
-            message: "Internal server error",
-            error: error.message
+            message: "Server error"
         });
     }
 });
+
 
 module.exports = router;
