@@ -7,45 +7,47 @@ const Donation = require('../models/Donation');
 // @desc    الدخول إلى محادثة أو إنشاؤها (بدون توكن)
 // @route   POST /api/chat/access
 router.post('/access', async (req, res) => {
-    const { donationId, senderId } = req.body; // نرسل الـ ID بتاع اللي فاتح الشات حالياً
+    const { donationId, senderId } = req.body; // استلام الـ senderId من فلاتر
+
+    if (!donationId || !senderId) {
+        return res.status(400).json({ message: "donationId and senderId are required" });
+    }
 
     try {
         const donation = await Donation.findById(donationId).populate('donor receiver driver');
+        if (!donation) return res.status(404).json({ message: "Donation not found" });
+
         const user = await User.findById(senderId);
+        if (!user) return res.status(404).json({ message: "User not found" });
 
-        let participants = [];
         let chatType = '';
+        let participants = [];
 
-        // تحديد نوع المحادثة بناءً على دور الشخص اللي فاتح الشات
+        // منطق تحديد نوع المحادثة بناءً على دور المستخدم الذي طلبها
         if (user.role === 'donor') {
-            participants = [donation.donor._id, donation.driver._id];
             chatType = 'donor-driver';
+            participants = [donation.donor._id, donation.driver._id];
         } else if (user.role === 'receiver') {
-            participants = [donation.receiver._id, donation.driver._id];
             chatType = 'receiver-driver';
-        } else if (user.role === 'driver') {
-            // السائق حالة خاصة، ممكن نخليه يختار هو عايز يكلم مين (بس للتبسيط هنفترض إنه بيرد على اللي بيكلمه)
-            return res.status(400).json({ message: "Driver should select a specific chat type" });
+            participants = [donation.receiver._id, donation.driver._id];
+        } else {
+            return res.status(400).json({ message: "Only donor or receiver can initiate chat" });
         }
 
-        // البحث عن المحادثة الثنائية المحددة
-        let chat = await Chat.findOne({ 
-            donation: donationId, 
-            chatType: chatType,
-            participants: { $all: participants } 
-        });
-
-        if (!chat) {
-            chat = await Chat.create({
-                donation: donationId,
-                participants: participants,
-                chatType: chatType
-            });
-        }
+        // البحث عن المحادثة الثنائية المحددة أو إنشاؤها
+        // نستخدم findOneAndUpdate مع upsert لمنع التكرار (نظام راحة الدماغ)
+        let chat = await Chat.findOneAndUpdate(
+            { donation: donationId, chatType: chatType },
+            { 
+                $setOnInsert: { participants: participants } 
+            },
+            { new: true, upsert: true }
+        ).populate("participants", "username avatar role");
 
         res.status(200).json(chat);
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        console.error(error);
+        res.status(500).json({ message: "Internal Server Error" });
     }
 });
 
