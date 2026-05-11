@@ -3,28 +3,44 @@ const mongoose = require('mongoose');
 const dotenv = require('dotenv');
 const cors = require('cors');
 
+// إعداد متغيرات البيئة
 dotenv.config();
 
 const app = express();
 
-// Middleware
-app.use(express.json());
+// //* =============================================================
+// //* ! 1. MIDDLEWARES (يجب أن تسبق المسارات دائماً)
+// //* =============================================================
+app.use(express.json()); // لقراءة بيانات JSON المرسلة من Flutter
 app.use(express.urlencoded({ extended: true }));
-app.use(cors());
+app.use(cors()); // للسماح بالاتصال من تطبيقات خارجية
 
-// --- 1. استيراد الراوتر الخاص بالشات ---
+// //* =============================================================
+// //* ! 2. ROUTES IMPORT (استيراد الملفات)
+// //* =============================================================
 const authRouter = require('./routes/auth');
 const forgotPasswordRouter = require('./routes/forgot_password');
 const donationRoutes = require('./routes/donationRoutes');
-const chatRoutes = require('./routes/chatRoutes'); // أضف هذا السطر
+const chatRoutes = require('./routes/chatRoutes');
 
-// --- 2. تعريف المسارات (Routes) ---
-app.use('/auth', authRouter);
-app.use('/auth/forgot-password', forgotPasswordRouter);
+// //* =============================================================
+// //* ! 3. ROUTES DEFINITION (تعريف المسارات)
+// //* =============================================================
+
+/** * ? تم حل مشكلة الـ 404 هنا:
+ * جعلنا 'forgotPasswordRouter' يعمل تحت '/auth' مباشرة.
+ * الرابط الصحيح في Flutter و Thunder Client سيكون الآن:
+ * http://localhost:3000/auth/forgot-password
+ */
+app.use('/auth', authRouter); 
+app.use('/auth', forgotPasswordRouter); 
+
 app.use('/api/donations', donationRoutes);
-app.use('/api/chat', chatRoutes); // أضف هذا السطر لاستدعاء الشات
+app.use('/api/chat', chatRoutes);
 
-// الاتصال بـ MongoDB
+// //* =============================================================
+// //* ! 4. DATABASE CONNECTION (الاتصال بقاعدة البيانات)
+// //* =============================================================
 mongoose.connect(process.env.MONGO_URI, {
     connectTimeoutMS: 10000,
 })
@@ -34,5 +50,11 @@ mongoose.connect(process.env.MONGO_URI, {
     process.exit(1);
 });
 
+// //* =============================================================
+// //* ! 5. SERVER START
+// //* =============================================================
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+app.listen(PORT, () => {
+    console.log(`🚀 Server running on port ${PORT}`);
+
+});
