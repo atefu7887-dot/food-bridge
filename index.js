@@ -16,12 +16,11 @@ app.use(cors());
 const authRouter = require('./routes/auth');
 const forgotPasswordRouter = require('./routes/forgot_password');
 const donationRoutes = require('./routes/donationRoutes');
-const chatRoutes = require('./routes/chats');
+
 
 app.use('/auth', authRouter);
 app.use('/auth/forgot-password', forgotPasswordRouter);
 app.use('/api/donations', donationRoutes);
-app.use('/api/chats', chatRoutes);
 
 mongoose.connect(process.env.MONGO_URI, {
     connectTimeoutMS: 10000, // وقت محدد للاتصال
