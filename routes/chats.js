@@ -9,104 +9,55 @@ const Donation = require('../models/Donation');
 //////////////////////////////////////////////////
 // 1. 🚪 إنشاء أو جلب غرفة محادثة (Access Chat)
 //////////////////////////////////////////////////
+// استبدل دالة accessChat في ملف chats.js بهذا الكود المؤمن
 router.post('/access', async (req, res) => {
   try {
     let { donationId, senderId, receiverId } = req.body;
 
-    // 1. التحقق من وجود الحقول المطلوبة
     if (!donationId || !senderId || !receiverId) {
-      return res.status(400).json({
-        success: false,
-        message: 'Missing required fields',
-      });
+      return res.status(400).json({ success: false, message: 'Missing fields' });
     }
 
-    // تنظيف المعرفات
-    donationId = donationId.toString().trim();
-    senderId = senderId.toString().trim();
-    receiverId = receiverId.toString().trim();
+    const participants = [senderId.toString(), receiverId.toString()].sort();
 
-    // 2. التحقق من صحة الـ Object IDs
-    if (
-      !mongoose.Types.ObjectId.isValid(donationId) ||
-      !mongoose.Types.ObjectId.isValid(senderId) ||
-      !mongoose.Types.ObjectId.isValid(receiverId)
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid IDs format',
-      });
-    }
-
-    // 3. التحقق من وجود التبرع
-    const donation = await Donation.findById(donationId);
-    if (!donation) {
-      return res.status(404).json({
-        success: false,
-        message: 'Donation not found',
-      });
-    }
-
-    // 4. ترتيب أطراف المحادثة لضمان فريديتها
-    const participants = [senderId, receiverId].sort();
-
-    // 5. البحث عن الغرفة أولاً
+    // 1. محاولة إيجاد الغرفة أولاً
     let chat = await Chat.findOne({
       donation: donationId,
-      participants: {
-        $all: participants,
-        $size: 2,
-      },
-    })
-      .populate('participants', 'username phone avatar role')
-      .populate('donation', 'title status');
+      participants: { $all: participants, $size: 2 },
+    }).populate('participants', 'username phone avatar role').populate('donation', 'title status');
 
-    // 6. إذا لم توجد، نقوم بالإنشاء مع معالجة أمان عالية
+    // 2. إذا لم توجد، حاول إنشاؤها
     if (!chat) {
       try {
         const createdChat = await Chat.create({
           donation: donationId,
           participants: participants,
         });
-
-        // جلب البيانات بعد الإنشاء لضمان الـ Populate
+        
         chat = await Chat.findById(createdChat._id)
           .populate('participants', 'username phone avatar role')
           .populate('donation', 'title status');
-          
       } catch (dbError) {
-        // في حالة التكرار أو التعارض اللحظي (Race Condition)، نحاول البحث مجدداً
+        // إذا فشل الإنشاء بسبب وجودها مسبقاً (خطأ 11000)، ابحث عنها مرة أخرى
         chat = await Chat.findOne({
           donation: donationId,
           participants: { $all: participants, $size: 2 },
-        })
-          .populate('participants', 'username phone avatar role')
-          .populate('donation', 'title status');
-
-        // إذا فشل البحث بعد الخطأ، نمرر الخطأ للـ catch الرئيسي
-        if (!chat) throw dbError;
+        }).populate('participants', 'username phone avatar role').populate('donation', 'title status');
+        
+        if (!chat) throw dbError; // إذا فشل البحث أيضاً، اخرج للخطأ الرئيسي
       }
     }
 
-    // 7. التأكد النهائي من وجود الكائن قبل الإرسال لمنع قيمة null
+    // 3. تأكيد نهائي قبل إرسال الرد
     if (!chat) {
-        return res.status(500).json({
-            success: false,
-            message: 'Failed to access or create chat room'
-        });
+      return res.status(404).json({ success: false, message: 'Chat could not be created' });
     }
 
-    return res.status(200).json({
-      success: true,
-      chat,
-    });
+    return res.status(200).json({ success: true, chat });
 
   } catch (error) {
-    console.error('CRITICAL ACCESS CHAT ERROR =>', error);
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    console.error('SERVER ACCESS CHAT ERROR =>', error);
+    return res.status(500).json({ success: false, message: error.message });
   }
 });
 
