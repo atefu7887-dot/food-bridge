@@ -3,11 +3,10 @@ const router = express.Router();
 const Chat = require('../models/Chat');
 const Message = require('../models/Message');
 const Donation = require('../models/Donation');
-const { protect } = require('../middleware/authMiddleware'); // استدعاء دالة الحماية
 
-// @desc    الدخول إلى محادثة أو إنشاؤها (مؤمن بالتوكن)
+// @desc    الدخول إلى محادثة أو إنشاؤها (بدون توكن)
 // @route   POST /api/chat/access
-router.post('/access', protect, async (req, res) => {
+router.post('/access', async (req, res) => {
     const { donationId } = req.body;
 
     if (!donationId) return res.status(400).json({ message: "Donation ID is required" });
@@ -43,26 +42,26 @@ router.post('/access', protect, async (req, res) => {
     }
 });
 
-// @desc    إرسال رسالة (مؤمن بالتوكن - السندر يؤخذ من التوكن)
+// @desc    إرسال رسالة (بدون توكن - يجب إرسال senderId في الـ body)
 // @route   POST /api/chat/message
-router.post('/message', protect, async (req, res) => {
-    const { chatId, text } = req.body;
+router.post('/message', async (req, res) => {
+    const { chatId, text, senderId } = req.body; // ننتظر senderId الآن من الفرونت إند
 
-    if (!chatId || !text) {
-        return res.status(400).json({ message: "chatId and text are required" });
+    if (!chatId || !text || !senderId) {
+        return res.status(400).json({ message: "chatId, text and senderId are required" });
     }
 
     try {
         const newMessage = await Message.create({
             chat: chatId,
-            sender: req.user._id, // المعرف يأتي من التوكن الآن تلقائياً
+            sender: senderId, // المعرف يتم تمريره يدوياً
             text: text
         });
 
         await Chat.findByIdAndUpdate(chatId, {
             lastMessage: {
                 text: text,
-                sender: req.user._id,
+                sender: senderId,
                 createdAt: new Date()
             }
         });
@@ -73,8 +72,9 @@ router.post('/message', protect, async (req, res) => {
     }
 });
 
-// @desc    جلب الرسائل (مؤمن بالتوكن)
-router.get('/messages/:chatId', protect, async (req, res) => {
+// @desc    جلب الرسائل (بدون توكن)
+// @route   GET /api/chat/messages/:chatId
+router.get('/messages/:chatId', async (req, res) => {
     try {
         const messages = await Message.find({ chat: req.params.chatId })
             .populate("sender", "username avatar role")
