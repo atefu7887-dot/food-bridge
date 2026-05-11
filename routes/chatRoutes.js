@@ -13,12 +13,16 @@ router.post('/access', async (req, res) => {
         const donation = await Donation.findById(donationId);
         const user = await User.findById(senderId);
 
-        if (!donation || !user) return res.status(404).json({ message: "Data missing" });
+        if (!donation || !user) return res.status(404).json({ message: "البيانات غير موجودة" });
+
+        // التحقق من وجود السائق أولاً قبل تحويله لنص
+        if (!donation.driver) {
+            return res.status(400).json({ message: "لم يتم تعيين متطوع (سائق) لهذا الطلب بعد" });
+        }
 
         let chatType = '';
         let participants = [];
 
-        // تحديد النوع والمشاركين "بالاسم" لضمان عدم التداخل
         if (user.role === 'donor') {
             chatType = 'donor-driver';
             participants = [donation.donor.toString(), donation.driver.toString()];
@@ -26,7 +30,6 @@ router.post('/access', async (req, res) => {
             chatType = 'receiver-driver';
             participants = [donation.receiver.toString(), donation.driver.toString()];
         } else if (user.role === 'driver') {
-            // السائق هو اللي لازم يحدد بيكلم مين
             if (targetRole === 'donor') {
                 chatType = 'donor-driver';
                 participants = [donation.donor.toString(), donation.driver.toString()];
@@ -36,29 +39,26 @@ router.post('/access', async (req, res) => {
             }
         }
 
-        // السر هنا: البحث عن غرفة فيها "نفس النوع" و "نفس المشاركين" بالظبط
-        let chat = await Chat.findOne({ 
-            donation: donationId, 
-            chatType: chatType 
-        });
+        // استخدام findOneAndUpdate مع upsert لضمان السرعة والدقة
+        const chat = await Chat.findOneAndUpdate(
+            { donation: donationId, chatType: chatType },
+            { 
+                $setOnInsert: { 
+                    donation: donationId, 
+                    chatType: chatType, 
+                    participants: participants 
+                } 
+            },
+            { new: true, upsert: true }
+        ).populate("participants", "username avatar role");
 
-        if (!chat) {
-            chat = await Chat.create({
-                donation: donationId,
-                chatType: chatType,
-                participants: participants
-            });
-        }
-
-        // تعبئة البيانات للفرونت إند
-        const populatedChat = await Chat.findById(chat._id).populate("participants", "username avatar role");
-        res.status(200).json(populatedChat);
+        res.status(200).json(chat);
 
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        console.error("Chat Access Error:", error);
+        res.status(500).json({ message: "حدث خطأ في السيرفر: " + error.message });
     }
 });
-
 
 // 2. إرسال رسالة (هنا كان الخطأ المحتمل)
 router.post('/message', async (req, res) => {
