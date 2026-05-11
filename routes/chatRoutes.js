@@ -1,99 +1,173 @@
 const express = require('express');
 const router = express.Router();
+
 const Chat = require('../models/Chat');
 const User = require('../models/User');
 const Donation = require('../models/Donation');
-const Message = require('../models/Message'); // تأكد من استيراد الموديل
 
-// 1. الدخول للمحادثة (شغال تمام عندك بس ضفنا Populate للمشاركين)
 router.post('/access', async (req, res) => {
+
     try {
-        const { donationId, senderId, targetRole } = req.body;
-        const donation = await Donation.findById(donationId);
-        const user = await User.findById(senderId);
 
-        if (!donation || !user || !donation.driver) {
-            return res.status(400).json({ message: "بيانات ناقصة أو السائق غير موجود" });
-        }
+        console.log("BODY => ", req.body);
 
-        // تحديد النوع المطلوب بدقة
-        let chatType = '';
-        if (user.role === 'donor') chatType = 'donor-driver';
-        else if (user.role === 'receiver') chatType = 'receiver-driver';
-        else if (user.role === 'driver') {
-            chatType = (targetRole === 'donor') ? 'donor-driver' : 'receiver-driver';
-        }
+        const {
+            donationId,
+            senderId,
+            targetRole,
+        } = req.body;
 
-        // البحث باستخدام donationId و chatType معاً
-        let chat = await Chat.findOne({ donation: donationId, chatType: chatType });
+        //////////////////////////////////////////////////////
+        // VALIDATION
+        //////////////////////////////////////////////////////
 
-        if (!chat) {
-            let participants = [];
-            if (chatType === 'donor-driver') {
-                participants = [donation.donor, donation.driver];
-            } else {
-                participants = [donation.receiver, donation.driver];
-            }
-
-            chat = await Chat.create({
-                donation: donationId,
-                chatType: chatType,
-                participants: participants
+        if (!donationId || !senderId) {
+            return res.status(400).json({
+                success: false,
+                message: "donationId or senderId missing"
             });
         }
 
-        const result = await Chat.findById(chat._id).populate("participants", "username avatar role");
-        res.status(200).json(result);
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
-});
+        //////////////////////////////////////////////////////
+        // FIND DATA
+        //////////////////////////////////////////////////////
 
-// 2. إرسال رسالة (هنا كان الخطأ المحتمل)
-router.post('/message', async (req, res) => {
-    const { chatId, text, senderId } = req.body;
+        const donation = await Donation.findById(
+            donationId
+        );
 
-    if (!chatId || !text || !senderId) {
-        return res.status(400).json({ message: "كل الحقول مطلوبة" });
-    }
+        const user = await User.findById(
+            senderId
+        );
 
-    try {
-        // إنشاء الرسالة
-        let newMessage = await Message.create({
-            chat: chatId,
-            sender: senderId,
-            text: text
+        console.log("DONATION => ", donation);
+        console.log("USER => ", user);
+
+        if (!donation) {
+            return res.status(404).json({
+                success: false,
+                message: "Donation not found"
+            });
+        }
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found"
+            });
+        }
+
+        if (!donation.driver) {
+            return res.status(400).json({
+                success: false,
+                message: "Driver not assigned yet"
+            });
+        }
+
+        //////////////////////////////////////////////////////
+        // CHAT TYPE
+        //////////////////////////////////////////////////////
+
+        let chatType = '';
+
+        if (user.role === 'donor') {
+            chatType = 'donor-driver';
+        }
+
+        else if (user.role === 'receiver') {
+            chatType = 'receiver-driver';
+        }
+
+        else if (user.role === 'driver') {
+
+            chatType =
+                targetRole === 'donor'
+                    ? 'donor-driver'
+                    : 'receiver-driver';
+        }
+
+        console.log("CHAT TYPE => ", chatType);
+
+        if (!chatType) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid chat type"
+            });
+        }
+
+        //////////////////////////////////////////////////////
+        // FIND CHAT
+        //////////////////////////////////////////////////////
+
+        let chat = await Chat.findOne({
+            donation: donationId,
+            chatType: chatType,
         });
 
-        // "تعبئة" بيانات المرسل عشان تظهر فوراً في فلاتر (مهم جداً)
-        newMessage = await newMessage.populate("sender", "username avatar role");
+        //////////////////////////////////////////////////////
+        // CREATE CHAT
+        //////////////////////////////////////////////////////
 
-        // تحديث المحادثة بآخر رسالة
-        await Chat.findByIdAndUpdate(chatId, {
-            lastMessage: {
-                text: text,
-                sender: senderId,
-                createdAt: new Date()
+        if (!chat) {
+
+            let participants = [];
+
+            if (chatType === 'donor-driver') {
+
+                participants = [
+                    donation.donor,
+                    donation.driver,
+                ];
+
+            } else {
+
+                participants = [
+                    donation.receiver,
+                    donation.driver,
+                ];
             }
+
+            console.log(
+                "PARTICIPANTS => ",
+                participants
+            );
+
+            chat = await Chat.create({
+                donation: donationId,
+                chatType,
+                participants,
+            });
+
+            console.log("CHAT CREATED");
+        }
+
+        //////////////////////////////////////////////////////
+        // RESPONSE
+        //////////////////////////////////////////////////////
+
+        const result =
+            await Chat.findById(chat._id)
+                .populate(
+                    'participants',
+                    'username avatar role'
+                );
+
+        return res.status(200).json({
+            success: true,
+            chat: result,
         });
 
-        // الرد بحالة 201 نجاح مع كائن الرسالة كاملاً
-        res.status(201).json(newMessage);
     } catch (error) {
-        console.error("Send Message Error:", error);
-        res.status(500).json({ message: "فشل في حفظ الرسالة بالسيرفر" });
-    }
-});
 
-// 3. جلب الرسائل
-router.get('/messages/:chatId', async (req, res) => {
-    try {
-        const messages = await Message.find({ chat: req.params.chatId })
-            .populate("sender", "username avatar role")
-            .sort({ createdAt: 1 });
-        res.status(200).json(messages);
-    } catch (error) {
-        res.status(500).json({ message: error.message });
+        console.log(
+            "ACCESS CHAT ERROR => ",
+            error
+        );
+
+        return res.status(500).json({
+            success: false,
+            message: error.message,
+        });
     }
 });
 
