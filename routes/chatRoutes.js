@@ -47,17 +47,20 @@ router.post('/access', async (req, res) => {
         }
 
         // التعديل السحري: البحث والإنشاء بناءً على الزوج (donation + chatType)
-        const chat = await Chat.findOneAndUpdate(
-            { donation: donationId, chatType: chatType }, 
-            { 
-                $setOnInsert: { 
-                    donation: donationId, 
-                    chatType: chatType, 
-                    participants: participants 
-                } 
-            },
-            { new: true, upsert: true }
-        ).populate("participants", "username avatar role");
+      const chat = await Chat.findOneAndUpdate(
+    { 
+        donation: donationId, 
+        chatType: chatType 
+    }, 
+    { 
+        $setOnInsert: { 
+            donation: donationId, 
+            chatType: chatType, 
+            participants: participants // التأكد من وضع المشاركين الصحيحين (سائق + طرف آخر)
+        } 
+    },
+    { new: true, upsert: true }
+).populate("participants", "username avatar role");
 
         res.status(200).json(chat);
     } catch (error) {
