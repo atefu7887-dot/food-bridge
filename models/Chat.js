@@ -28,4 +28,7 @@ const chatSchema = new mongoose.Schema({
     }
 }, { timestamps: true });
 
+// التعديل السحري: منع تكرار المحادثة لنفس التبرع من نفس النوع
+chatSchema.index({ donation: 1, chatType: 1 }, { unique: true });
+
 module.exports = mongoose.model('Chat', chatSchema);
