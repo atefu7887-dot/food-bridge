@@ -12,52 +12,49 @@ const Donation = require('../models/Donation');
 // استبدل دالة accessChat في ملف chats.js بهذا الكود المؤمن
 router.post('/access', async (req, res) => {
   try {
-    let { donationId, senderId, receiverId } = req.body;
+    const { donationId, userId } = req.body; // نحتاج فقط معرف التبرع والمستخدم الحالي
 
-    if (!donationId || !senderId || !receiverId) {
-      return res.status(400).json({ success: false, message: 'Missing fields' });
+    // 1. جلب بيانات التبرع لمعرفة الأطراف (المتبرع، الجمعية، السائق)
+    const donation = await Donation.findById(donationId);
+    if (!donation) {
+      return res.status(404).json({ success: false, message: 'Donation not found' });
     }
 
-    const participants = [senderId.toString(), receiverId.toString()].sort();
+    // 2. تجميع الأطراف المتاحة حالياً
+    const participants = [];
+    if (donation.donor) participants.push(donation.donor.toString());
+    if (donation.receiver) participants.push(donation.receiver.toString());
+    if (donation.driver) participants.push(donation.driver.toString());
 
-    // 1. محاولة إيجاد الغرفة أولاً
-    let chat = await Chat.findOne({
-      donation: donationId,
-      participants: { $all: participants, $size: 2 },
-    }).populate('participants', 'username phone avatar role').populate('donation', 'title status');
-
-    // 2. إذا لم توجد، حاول إنشاؤها
-    if (!chat) {
-      try {
-        const createdChat = await Chat.create({
-          donation: donationId,
-          participants: participants,
-        });
-        
-        chat = await Chat.findById(createdChat._id)
-          .populate('participants', 'username phone avatar role')
-          .populate('donation', 'title status');
-      } catch (dbError) {
-        // إذا فشل الإنشاء بسبب وجودها مسبقاً (خطأ 11000)، ابحث عنها مرة أخرى
-        chat = await Chat.findOne({
-          donation: donationId,
-          participants: { $all: participants, $size: 2 },
-        }).populate('participants', 'username phone avatar role').populate('donation', 'title status');
-        
-        if (!chat) throw dbError; // إذا فشل البحث أيضاً، اخرج للخطأ الرئيسي
-      }
+    // التأكد من أن المستخدم الحالي جزء من هذا التبرع
+    if (!participants.includes(userId.toString())) {
+       return res.status(403).json({ success: false, message: 'You are not part of this donation' });
     }
 
-    // 3. تأكيد نهائي قبل إرسال الرد
+    // 3. البحث عن الغرفة أو إنشاؤها بناءً على الـ donationId فقط
+    let chat = await Chat.findOne({ donation: donationId })
+      .populate('participants', 'username phone avatar role')
+      .populate('donation', 'title status');
+
     if (!chat) {
-      return res.status(404).json({ success: false, message: 'Chat could not be created' });
+      chat = await Chat.create({
+        donation: donationId,
+        participants: participants,
+      });
+      
+      chat = await Chat.findById(chat._id)
+        .populate('participants', 'username phone avatar role')
+        .populate('donation', 'title status');
+    } else {
+      // تحديث المشاركين في حال انضم سائق جديد لاحقاً
+      chat.participants = participants;
+      await chat.save();
     }
 
     return res.status(200).json({ success: true, chat });
 
   } catch (error) {
-    console.error('SERVER ACCESS CHAT ERROR =>', error);
-    return res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({ success: false, message: error.message });
   }
 });
 
