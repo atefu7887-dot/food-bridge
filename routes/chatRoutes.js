@@ -1,32 +1,35 @@
 const express = require('express');
 const router = express.Router();
 const Chat = require('../models/Chat');
-const Message = require('../models/Message');
+const User = require('../models/User');
 const Donation = require('../models/Donation');
-const User = require('../models/User'); // هــــــــذا السطر كان ناقصاً (تأكد من المسار الصحيح)
 
-// @desc    الدخول إلى محادثة ثنائية (بدون توكن)
 router.post('/access', async (req, res) => {
-    const { donationId, senderId } = req.body;
-
-    if (!donationId || !senderId) {
-        return res.status(400).json({ message: "donationId and senderId are required" });
-    }
-
     try {
-        // 1. التأكد من وجود التبرع وتوافر السائق
-        const donation = await Donation.findById(donationId);
-        if (!donation) return res.status(404).json({ message: "Donation not found" });
-        if (!donation.driver) return res.status(400).json({ message: "No driver assigned to this donation yet" });
+        const { donationId, senderId, targetRole } = req.body;
 
-        // 2. التأكد من وجود المستخدم
+        // 1. التأكد من وصول البيانات الأساسية
+        if (!donationId || !senderId) {
+            return res.status(400).json({ message: "donationId and senderId are required" });
+        }
+
+        // 2. جلب بيانات التبرع والمستخدم
+        const donation = await Donation.findById(donationId);
         const user = await User.findById(senderId);
-        if (!user) return res.status(404).json({ message: "User not found" });
+
+        if (!donation || !user) {
+            return res.status(404).json({ message: "Donation or User not found" });
+        }
+
+        // 3. التحقق من وجود السائق (شرط أساسي لفتح شات ثنائي)
+        if (!donation.driver) {
+            return res.status(400).json({ message: "لم يتم تعيين سائق بعد، لا يمكن بدء المحادثة" });
+        }
 
         let chatType = '';
         let participants = [];
 
-        // 3. تحديد أطراف المحادثة بناءً على دور المستخدم
+        // 4. تحديد نوع المحادثة بناءً على دور المستخدم
         if (user.role === 'donor') {
             chatType = 'donor-driver';
             participants = [donation.donor, donation.driver];
@@ -34,20 +37,23 @@ router.post('/access', async (req, res) => {
             chatType = 'receiver-driver';
             participants = [donation.receiver, donation.driver];
         } else if (user.role === 'driver') {
-             // إذا كان السائق هو من يفتح، نحتاج لمعرفة من يريد محادثته (Donor أم Receiver)
-             // للتبسيط، السيرفر سيبحث عن المحادثات التي يكون السائق طرفاً فيها
-             return res.status(400).json({ message: "Driver must access specific chat type" });
-        } else {
-            return res.status(400).json({ message: "Invalid user role for chat" });
+            // السائق يحدد من يريد محادثته عبر targetRole المرسلة من فلاتر
+            if (targetRole === 'donor') {
+                chatType = 'donor-driver';
+                participants = [donation.donor, donation.driver];
+            } else {
+                chatType = 'receiver-driver';
+                participants = [donation.receiver, donation.driver];
+            }
         }
 
-        // 4. استخدام findOneAndUpdate لضمان إنشاء محادثة واحدة فقط (نظام راحة الدماغ)
+        // 5. إنشاء أو جلب المحادثة (استخدام findOneAndUpdate لمنع التكرار)
         const chat = await Chat.findOneAndUpdate(
             { donation: donationId, chatType: chatType },
             { 
                 $setOnInsert: { 
-                    donation: donationId,
-                    chatType: chatType,
+                    donation: donationId, 
+                    chatType: chatType, 
                     participants: participants 
                 } 
             },
@@ -56,51 +62,8 @@ router.post('/access', async (req, res) => {
 
         res.status(200).json(chat);
     } catch (error) {
-        console.error("SERVER ERROR:", error);
-        res.status(500).json({ message: "فشل إنشاء الغرفة: " + error.message });
-    }
-});
-
-// @desc    إرسال رسالة (بدون توكن - يجب إرسال senderId في الـ body)
-// @route   POST /api/chat/message
-router.post('/message', async (req, res) => {
-    const { chatId, text, senderId } = req.body; // ننتظر senderId الآن من الفرونت إند
-
-    if (!chatId || !text || !senderId) {
-        return res.status(400).json({ message: "chatId, text and senderId are required" });
-    }
-
-    try {
-        const newMessage = await Message.create({
-            chat: chatId,
-            sender: senderId, // المعرف يتم تمريره يدوياً
-            text: text
-        });
-
-        await Chat.findByIdAndUpdate(chatId, {
-            lastMessage: {
-                text: text,
-                sender: senderId,
-                createdAt: new Date()
-            }
-        });
-
-        res.status(201).json(newMessage);
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
-});
-
-// @desc    جلب الرسائل (بدون توكن)
-// @route   GET /api/chat/messages/:chatId
-router.get('/messages/:chatId', async (req, res) => {
-    try {
-        const messages = await Message.find({ chat: req.params.chatId })
-            .populate("sender", "username avatar role")
-            .sort({ createdAt: 1 });
-        res.status(200).json(messages);
-    } catch (error) {
-        res.status(500).json({ message: error.message });
+        console.error("Chat Access Error:", error);
+        res.status(500).json({ message: "Server Error: " + error.message });
     }
 });
 
