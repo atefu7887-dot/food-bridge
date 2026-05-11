@@ -9,54 +9,43 @@ const Message = require('../models/Message'); // تأكد من استيراد ا
 router.post('/access', async (req, res) => {
     try {
         const { donationId, senderId, targetRole } = req.body;
-
         const donation = await Donation.findById(donationId);
         const user = await User.findById(senderId);
 
-        if (!donation || !user) return res.status(404).json({ message: "البيانات غير موجودة" });
-
-        // التحقق من وجود السائق أولاً قبل تحويله لنص
-        if (!donation.driver) {
-            return res.status(400).json({ message: "لم يتم تعيين متطوع (سائق) لهذا الطلب بعد" });
+        if (!donation || !user || !donation.driver) {
+            return res.status(400).json({ message: "بيانات ناقصة أو السائق غير موجود" });
         }
 
+        // تحديد النوع المطلوب بدقة
         let chatType = '';
-        let participants = [];
-
-        if (user.role === 'donor') {
-            chatType = 'donor-driver';
-            participants = [donation.donor.toString(), donation.driver.toString()];
-        } else if (user.role === 'receiver') {
-            chatType = 'receiver-driver';
-            participants = [donation.receiver.toString(), donation.driver.toString()];
-        } else if (user.role === 'driver') {
-            if (targetRole === 'donor') {
-                chatType = 'donor-driver';
-                participants = [donation.donor.toString(), donation.driver.toString()];
-            } else {
-                chatType = 'receiver-driver';
-                participants = [donation.receiver.toString(), donation.driver.toString()];
-            }
+        if (user.role === 'donor') chatType = 'donor-driver';
+        else if (user.role === 'receiver') chatType = 'receiver-driver';
+        else if (user.role === 'driver') {
+            chatType = (targetRole === 'donor') ? 'donor-driver' : 'receiver-driver';
         }
 
-        // استخدام findOneAndUpdate مع upsert لضمان السرعة والدقة
-        const chat = await Chat.findOneAndUpdate(
-            { donation: donationId, chatType: chatType },
-            { 
-                $setOnInsert: { 
-                    donation: donationId, 
-                    chatType: chatType, 
-                    participants: participants 
-                } 
-            },
-            { new: true, upsert: true }
-        ).populate("participants", "username avatar role");
+        // البحث باستخدام donationId و chatType معاً
+        let chat = await Chat.findOne({ donation: donationId, chatType: chatType });
 
-        res.status(200).json(chat);
+        if (!chat) {
+            let participants = [];
+            if (chatType === 'donor-driver') {
+                participants = [donation.donor, donation.driver];
+            } else {
+                participants = [donation.receiver, donation.driver];
+            }
 
+            chat = await Chat.create({
+                donation: donationId,
+                chatType: chatType,
+                participants: participants
+            });
+        }
+
+        const result = await Chat.findById(chat._id).populate("participants", "username avatar role");
+        res.status(200).json(result);
     } catch (error) {
-        console.error("Chat Access Error:", error);
-        res.status(500).json({ message: "حدث خطأ في السيرفر: " + error.message });
+        res.status(500).json({ message: error.message });
     }
 });
 
