@@ -22,12 +22,13 @@ router.post('/access', async (req, res) => {
         }
 
         if (!donation.driver) {
-            return res.status(400).json({ message: "لم يتم تعيين سائق بعد، لا يمكن بدء المحادثة" });
+            return res.status(400).json({ message: "لم يتم تعيين سائق بعد" });
         }
 
         let chatType = '';
         let participants = [];
 
+        // تحديد نوع المحادثة بدقة لمنع التداخل
         if (user.role === 'donor') {
             chatType = 'donor-driver';
             participants = [donation.donor, donation.driver];
@@ -35,6 +36,7 @@ router.post('/access', async (req, res) => {
             chatType = 'receiver-driver';
             participants = [donation.receiver, donation.driver];
         } else if (user.role === 'driver') {
+            // هنا السر: السائق يجب أن يرسل targetRole من فلاتر
             if (targetRole === 'donor') {
                 chatType = 'donor-driver';
                 participants = [donation.donor, donation.driver];
@@ -44,8 +46,9 @@ router.post('/access', async (req, res) => {
             }
         }
 
+        // التعديل السحري: البحث والإنشاء بناءً على الزوج (donation + chatType)
         const chat = await Chat.findOneAndUpdate(
-            { donation: donationId, chatType: chatType },
+            { donation: donationId, chatType: chatType }, 
             { 
                 $setOnInsert: { 
                     donation: donationId, 
@@ -58,6 +61,7 @@ router.post('/access', async (req, res) => {
 
         res.status(200).json(chat);
     } catch (error) {
+        console.error("Access Error:", error);
         res.status(500).json({ message: error.message });
     }
 });
