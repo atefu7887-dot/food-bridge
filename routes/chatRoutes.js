@@ -199,4 +199,16 @@ router.get('/user/:userId', async (req, res) => {
     }
 });
 
+router.put('/read-all/:chatId', async (req, res) => {
+    try {
+        await Message.updateMany(
+            { chat: req.params.chatId, sender: { $ne: req.body.userId } },
+            { $set: { isRead: true } }
+        );
+        res.status(200).json({ message: "تم تحديث حالة القراءة" });
+    } catch (e) {
+        res.status(500).json({ message: e.message });
+    }
+});
+
 module.exports = router;
