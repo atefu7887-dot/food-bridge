@@ -164,31 +164,30 @@ router.get('/user/:userId', async (req, res) => {
     try {
         const { userId } = req.params;
 
-      
         const chats = await Chat.find({
             participants: userId
         })
-        .populate({
-            path: 'donation',
-           
-            select: 'title status donor driver receiver' 
-        })
-        .populate('participants', 'username avatar role')
-        .sort({ updatedAt: -1 });
+            .populate({
+                path: 'donation',
+                select: 'title status donor driver receiver'
+            })
+            .populate('participants', 'username avatar role')
+            .sort({ updatedAt: -1 });
 
-        const formattedChats = chats.map(chat => {
-          
-            const receiver = chat.participants.find(p => p._id.toString() !== userId);
-
+            const formattedChats = chats.map(chat => {
+            const otherParticipant = chat.participants.find(p => p._id.toString() !== userId);
             return {
                 _id: chat._id,
-                receiverName: receiver ? receiver.username : "User",
-                receiverAvatar: receiver ? receiver.avatar : null,
-         
-                lastMessage: (chat.lastMessage && chat.lastMessage.text) 
-                             ? chat.lastMessage.text 
-                             : "No messages yet",
+
+                driverName: otherParticipant ? otherParticipant.username : "User",
+                driverAvatar: otherParticipant ? otherParticipant.avatar : null,
+                receiverName: otherParticipant ? otherParticipant.username : "User",
+                receiverAvatar: otherParticipant ? otherParticipant.avatar : null,
+                lastMessage: (chat.lastMessage && chat.lastMessage.text)
+                    ? chat.lastMessage.text
+                    : "Tap to start chatting",
                 donation: chat.donation,
+                chatType: chat.chatType,
                 updatedAt: chat.updatedAt
             };
         });
