@@ -80,54 +80,22 @@ router.post('/access', async (req, res) => {
 ////////////////////////////////////////////////////////
 
 router.post('/message', async (req, res) => {
-
     try {
+        const { chatId, text, senderId } = req.body;
 
-        const {
-            chatId,
-            text,
-            senderId,
-        } = req.body;
-
-        if (
-            !chatId ||
-            !text ||
-            !senderId
-        ) {
-
-            return res.status(400).json({
-                message:
-                    "كل الحقول مطلوبة"
-            });
+        if (!chatId || !text || !senderId) {
+            return res.status(400).json({ message: "كل الحقول مطلوبة" });
         }
 
-        //////////////////////////////////////////////////////
-        // CREATE MESSAGE
-        //////////////////////////////////////////////////////
 
-        let newMessage =
-            await Message.create({
+        let newMessage = await Message.create({
+            chat: chatId,
+            sender: senderId,
+            text: text,
+        });
 
-                chat: chatId,
+        newMessage = await newMessage.populate("sender", "username avatar role");
 
-                sender: senderId,
-
-                text: text,
-            });
-
-        //////////////////////////////////////////////////////
-        // POPULATE
-        //////////////////////////////////////////////////////
-
-        newMessage =
-            await newMessage.populate(
-                "sender",
-                "username avatar role"
-            );
-
-        //////////////////////////////////////////////////////
-        // UPDATE LAST MESSAGE
-        //////////////////////////////////////////////////////
 
         await Chat.findByIdAndUpdate(
             chatId,
@@ -136,32 +104,19 @@ router.post('/message', async (req, res) => {
                     text: text,
                     sender: senderId,
                     createdAt: new Date(),
-                }
-            }
+                },
+
+                updatedAt: new Date()
+            },
+            { new: true }
         );
 
-        //////////////////////////////////////////////////////
-        // RESPONSE
-        //////////////////////////////////////////////////////
-
-        res.status(201).json(
-            newMessage
-        );
-
+        res.status(201).json(newMessage);
     } catch (error) {
-
-        console.log(
-            "SEND MESSAGE ERROR => ",
-            error
-        );
-
-        res.status(500).json({
-            message:
-                "فشل إرسال الرسالة"
-        });
+        console.log("SEND MESSAGE ERROR => ", error);
+        res.status(500).json({ message: "فشل إرسال الرسالة" });
     }
 });
-
 ////////////////////////////////////////////////////////
 // FETCH MESSAGES
 ////////////////////////////////////////////////////////
