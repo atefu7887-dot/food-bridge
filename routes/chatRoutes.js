@@ -160,7 +160,6 @@ router.get(
 // GET USER CHATS 
 ////////////////////////////////////////////////////////
 
-// GET USER CHATS 
 router.get('/user/:userId', async (req, res) => {
     try {
         const { userId } = req.params;
