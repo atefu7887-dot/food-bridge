@@ -178,14 +178,14 @@ router.get(
                         req.params.chatId
                 })
 
-                .populate(
-                    "sender",
-                    "username avatar role"
-                )
+                    .populate(
+                        "sender",
+                        "username avatar role"
+                    )
 
-                .sort({
-                    createdAt: 1
-                });
+                    .sort({
+                        createdAt: 1
+                    });
 
             res.status(200).json(
                 messages
@@ -200,5 +200,45 @@ router.get(
         }
     }
 );
+
+////////////////////////////////////////////////////////
+// GET USER CHATS 
+////////////////////////////////////////////////////////
+
+router.get('/user/:userId', async (req, res) => {
+    try {
+        const { userId } = req.params;
+
+
+        const chats = await Chat.find({
+            participants: userId
+        })
+            .populate({
+                path: 'donation',
+                select: 'title foodItems status'
+            })
+            .populate('participants', 'username avatar role')
+            .sort({ updatedAt: -1 });
+
+        const formattedChats = chats.map(chat => {
+
+            const receiver = chat.participants.find(p => p._id.toString() !== userId);
+
+            return {
+                _id: chat._id,
+                receiverName: receiver ? receiver.username : "User",
+                receiverAvatar: receiver ? receiver.avatar : null,
+                lastMessage: chat.lastMessage ? chat.lastMessage.text : "No messages yet",
+                donation: chat.donation,
+                updatedAt: chat.updatedAt
+            };
+        });
+
+        res.status(200).json(formattedChats);
+    } catch (error) {
+        console.log("GET USER CHATS ERROR => ", error);
+        res.status(500).json({ message: error.message });
+    }
+});
 
 module.exports = router;
