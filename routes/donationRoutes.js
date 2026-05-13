@@ -127,19 +127,17 @@ router.patch('/:id/assign-driver', async (req, res) => {
         const donation = await Donation.findById(req.params.id);
 
         if (!donation) return res.status(404).json({ success: false, message: 'Donation not found' });
-        
-        // منع التعيين قبل موافقة المتبرع (Pending Approval)
-        if (donation.status === 'Pending Approval') {
-            return res.status(400).json({ success: false, message: 'انتظر موافقة المتبرع أولاً' });
-        }
 
         donation.driver = driverId;
-        donation.status = 'Assigned'; // الحالة الآن "تم التعيين" وفي انتظار رد السائق
+        donation.status = 'Assigned';
+        
+        // 🛑 السطر الأهم الذي يجعل الإشعار يختفي ويظهر عند السائق 🛑
+        donation.driverRequestStatus = 'Approved'; 
+        
         donation.timeline.assignedAt = Date.now(); 
         await donation.save();
 
-        const populated = await Donation.findById(donation._id).populate('driver', 'username phone avatar');
-        res.status(200).json({ success: true, donation: populated });
+        res.status(200).json({ success: true });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
