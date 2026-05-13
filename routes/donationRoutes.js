@@ -613,4 +613,45 @@ router.patch('/:id/driver-pickup-anyway', async (req, res) => {
     }
 });
 
+// إضافة مسار طلب السائق للمهمة من الماركت
+router.patch('/:id/driver-request', async (req, res) => {
+    try {
+        const { driverId } = req.body;
+        const donation = await Donation.findById(req.params.id).populate('receiver');
+
+        if (!donation) {
+            return res.status(404).json({ success: false, message: 'المهمة غير موجودة' });
+        }
+
+        if (donation.driver) {
+            return res.status(400).json({ success: false, message: 'هذه المهمة محجوزة بالفعل لسائق آخر' });
+        }
+
+        // تحديث البيانات لتعليق الطلب بانتظار موافقة الجمعية
+        donation.driver = driverId;
+        donation.status = 'Assigned';
+        donation.driverRequestStatus = 'Pending'; // الحقل الذي يمنع الاقتناص الفوري
+
+        await donation.save();
+
+        // إرسال إشعار للجمعية
+        if (donation.receiver && donation.receiver.fcmToken) {
+            const driver = await User.findById(driverId);
+            sendNotification(
+                donation.receiver.fcmToken,
+                "طلب توصيل جديد 🚚",
+                `السائق (${driver.username}) يرغب في توصيل طلبك.`
+            );
+        }
+
+        res.status(200).json({ 
+            success: true, 
+            message: 'تم إرسال طلبك للجمعية، في انتظار موافقتهم.',
+            donation 
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 module.exports = router;
