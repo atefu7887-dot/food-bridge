@@ -123,28 +123,28 @@ router.put('/update-profile/:userId', upload.single('avatar'), async (req, res) 
         const { userId } = req.params;
         let updateData = { ...req.body };
 
+        // 🛑 تحويل النص القادم من الموبايل إلى Object 🛑
         if (updateData.availability && typeof updateData.availability === 'string') {
-            const availObj = JSON.parse(updateData.availability);
-
-            // 1. ابحث عن المستخدم لتعرف الـ ID الخاص بالـ availability
-            const user = await User.findById(userId);
-
-            if (user.availability) {
-                // 2. حدث بيانات الجدول المنفصل
-                await Availability.findByIdAndUpdate(user.availability, availObj);
-            } else {
-                // 3. إذا لم يكن لديه، أنشئ واحداً جديداً واربطه
-                const newAvail = await Availability.create(availObj);
-                updateData.availability = newAvail._id;
+            try {
+                updateData.availability = JSON.parse(updateData.availability);
+            } catch (e) {
+                console.error("Error parsing JSON:", e);
             }
-            // نحذفها من الـ updateData لأننا حدثناها يدوياً ولا نريد حدوث Cast Error
-            delete updateData.availability;
         }
 
-        const updatedUser = await User.findByIdAndUpdate(userId, updateData, { new: true })
-            .populate('availability');
-        res.status(200).json({ success: true, user: updatedUser });
+        if (req.file) {
+            updateData.avatar = await uploadToImgBB(req.file.buffer);
+        }
+
+        // تحديث المستخدم (لا حاجة لـ populate الآن لأن البيانات مدمجة)
+        const updatedUser = await User.findByIdAndUpdate(userId, updateData, { new: true });
+
+        res.status(200).json({
+            success: true,
+            user: updatedUser
+        });
     } catch (error) {
+        // 🛑 إرسال الرد كـ JSON دائماً لمنع FormatException في فلاتر 🛑
         res.status(500).json({ success: false, message: error.message });
     }
 });
