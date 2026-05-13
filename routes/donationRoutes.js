@@ -31,24 +31,41 @@ async function uploadToImgBB(buffer) {
     }
 }
 
-// 1. ➕ إضافة تبرع جديد
+// ➕ إضافة تبرع جديد (معدل لدعم المواقع الدقيقة على الخريطة)
 router.post('/add', upload.array('photos', 5), async (req, res) => {
     try {
         const {
-            donorId, title, foodType, itemDetails, quantity,
-            vegQty, nonVegQty, location, contactPhone,
-            expiryDate, expiryTime, isQualityAssured, receiverId
+            donorId,
+            title,
+            foodType,
+            itemDetails,
+            quantity,
+            vegQty,
+            nonVegQty,
+            location, // العنوان النصي
+            lat,      // خط العرض (Latitude) من الخريطة
+            lng,      // خط الطول (Longitude) من الخريطة
+            contactPhone,
+            expiryDate,
+            expiryTime,
+            isQualityAssured,
+            receiverId
         } = req.body;
 
+        // 1. التحقق من وجود المتبرع
         const donor = await User.findById(donorId);
-        if (!donor) return res.status(400).json({ success: false, message: 'Donor not found' });
+        if (!donor) {
+            return res.status(400).json({ success: false, message: 'Donor not found' });
+        }
 
+        // 2. رفع الصور إلى ImgBB (إذا وجدت)
         let imageUrls = [];
         if (req.files && req.files.length > 0) {
             const uploadPromises = req.files.map(file => uploadToImgBB(file.buffer));
             imageUrls = await Promise.all(uploadPromises);
         }
 
+        // 3. إنشاء كائن التبرع الجديد مع الإحداثيات
         const newDonation = new Donation({
             donor: donorId,
             receiver: receiverId || null,
@@ -61,7 +78,14 @@ router.post('/add', upload.array('photos', 5), async (req, res) => {
                 nonVeg: parseInt(nonVegQty) || 0
             },
             images: imageUrls,
-            location,
+            // --- التعديل هنا: تخزين بيانات الموقع بدقة ---
+            location: location, // العنوان النصي للوصف
+            pickupLocation: {
+                lat: parseFloat(lat),
+                lng: parseFloat(lng),
+                address: location
+            },
+            // ------------------------------------------
             contactPhone: contactPhone || donor.phone,
             expiryDate,
             expiryTime,
@@ -69,9 +93,17 @@ router.post('/add', upload.array('photos', 5), async (req, res) => {
             status: 'Pending'
         });
 
+        // 4. حفظ في قاعدة البيانات
         await newDonation.save();
-        res.status(201).json({ success: true, message: "Donation created!", donation: newDonation });
+
+        res.status(201).json({ 
+            success: true, 
+            message: "Donation created successfully!", 
+            donation: newDonation 
+        });
+
     } catch (error) {
+        console.error("Error adding donation:", error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
