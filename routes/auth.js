@@ -123,34 +123,42 @@ router.put('/update-profile/:userId', upload.single('avatar'), async (req, res) 
         const { userId } = req.params;
         let updateData = { ...req.body };
 
-        // 🛑 الخطوة المصيرية: تحويل النص القادم من الموبايل إلى Object 🛑
+        // 1. فك تشفير بيانات availability القادمة من الموبايل
         if (updateData.availability && typeof updateData.availability === 'string') {
-            try {
-                updateData.availability = JSON.parse(updateData.availability);
-            } catch (e) {
-                console.error("Error parsing availability JSON:", e);
-                // إذا فشل الـ parse نتركها كما هي أو نتعامل مع الخطأ
+            const availObj = JSON.parse(updateData.availability);
+
+            // 2. ابحث عن المستخدم لتعرف ما إذا كان لديه سجل availability سابق
+            const user = await User.findById(userId);
+
+            if (user.availability) {
+                // تحديث السجل الموجود فعلياً في جدول Availability
+                await Availability.findByIdAndUpdate(user.availability, availObj);
+            } else {
+                // إذا لم يكن لديه سجل، أنشئ واحداً جديداً
+                const newAvail = await Availability.create(availObj);
+                // اربط المعرف الجديد ببيانات تحديث المستخدم
+                updateData.availability = newAvail._id;
+            }
+            
+            // 🛑 هام: إذا قمنا بتحديث السجل الموجود، نحذف الحقل من updateData 
+            // لكي لا يحاول Mongoose وضع الـ Object مكان الـ ID ويحدث خطأ الـ Cast
+            if (user.availability) {
+                delete updateData.availability;
             }
         }
 
-        // إذا قام المستخدم برفع صورة جديدة
+        // 3. معالجة الصورة
         if (req.file) {
             updateData.avatar = await uploadToImgBB(req.file.buffer);
         }
 
-        // تحديث البيانات في قاعدة البيانات
-        // ملاحظة: استخدم populate لإرجاع البيانات كاملة للفلاتر
+        // 4. تحديث بيانات المستخدم النهائية
         const updatedUser = await User.findByIdAndUpdate(
             userId, 
             updateData, 
             { new: true }
         ).populate('availability');
 
-        if (!updatedUser) {
-            return res.status(404).json({ success: false, message: "User not found" });
-        }
-
-        // إرجاع رد JSON سليم (هذا سيمنع الـ FormatException في فلاتر)
         res.status(200).json({
             success: true,
             message: "Profile updated successfully 🎉",
@@ -159,11 +167,7 @@ router.put('/update-profile/:userId', upload.single('avatar'), async (req, res) 
 
     } catch (error) {
         console.error("Update Error:", error);
-        // 🛑 تأكد دائماً من إرسال JSON حتى في حالة الخطأ 🛑
-        res.status(500).json({ 
-            success: false, 
-            message: "Internal Server Error: " + error.message 
-        });
+        res.status(500).json({ success: false, message: error.message });
     }
 });
 
