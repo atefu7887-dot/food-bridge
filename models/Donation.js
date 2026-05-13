@@ -23,6 +23,13 @@ const donationSchema = new mongoose.Schema({
     expiryTime: { type: String },
     isQualityAssured: { type: Boolean, default: false },
     
+    // 🛑 الحقل المفقود الذي سبب المشكلة 🛑
+    driverRequestStatus: { 
+        type: String, 
+        enum: ['Pending', 'Approved', null], 
+        default: null 
+    },
+
     driverLocation: {
         lat: { type: Number, default: 30.5852 }, 
         lng: { type: Number, default: 31.5035 }

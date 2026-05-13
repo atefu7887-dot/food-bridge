@@ -510,25 +510,54 @@ router.get('/driver/available-tasks', async (req, res) => {
     }
 });
 
-// donations.js - تعديل مسار طلب السائق من الماركت
-// تعديل مسار طلب السائق (driver-request)
-router.patch('/:id/driver-request', async (req, res) => {
+// 4. ✅ قبول السائق للمهمة (المعدل لفرض نظام موافقة الجمعية)
+router.patch('/:id/driver-accept', async (req, res) => {
     try {
-        const { driverId } = req.body;
-        const donation = await Donation.findById(req.params.id);
-
-        if (donation.driver) {
-            return res.status(400).json({ success: false, message: 'هذه المهمة محجوزة بالفعل' });
+        // عمل populate لجلب بيانات الجمعية (receiver) لإرسال الإشعارات لاحقاً
+        const donation = await Donation.findById(req.params.id).populate('receiver');
+        
+        if (!donation) {
+            return res.status(404).json({ success: false, message: 'الطلب غير موجود' });
         }
 
-        donation.driver = driverId;
-        donation.status = 'Assigned'; 
-        // التعديل هنا: نضع حالة "انتظار موافقة الجمعية"
-        donation.driverRequestStatus = 'Pending'; 
+        /**
+         * 🛑 التعديل الأهم: الحماية من الاقتناص المنفرد
+         * نتحقق من حقل driverRequestStatus:
+         * - إذا كان 'Pending': يعني السائق أرسل طلباً والجمعية لم توافق بعد (ممنوع القبول).
+         * - إذا كان 'Approved' أو null (في حالة التعيين المباشر): مسموح للسائق التأكيد.
+         */
+        if (donation.driverRequestStatus === 'Pending') {
+            return res.status(403).json({ 
+                success: false, 
+                message: 'لا يمكنك تأكيد استلام المهمة قبل أن توافق الجمعية على طلبك أولاً.' 
+            });
+        }
+
+        // تحديث حالة التبرع لتصبح مقبولة رسمياً من الطرفين
+        donation.status = 'Accepted';
+        
+        // نغير حالة الطلب ليكون مؤكداً تماماً
+        donation.driverRequestStatus = 'Approved'; 
         
         await donation.save();
-        res.status(200).json({ success: true, message: 'تم إرسال طلبك للجمعية' });
+
+        // 🔔 إرسال إشعار للجمعية (الـ Receiver) بأن السائق أكد المهمة وسيبدأ التحرك
+        if (donation.receiver && donation.receiver.fcmToken) {
+            sendNotification(
+                donation.receiver.fcmToken,
+                "السائق أكد المهمة! 🚚",
+                `وافق السائق رسمياً على توصيل طلبك (${donation.title}) وهو في طريقه للاستلام.`
+            );
+        }
+
+        res.status(200).json({ 
+            success: true, 
+            message: 'تم تأكيد المهمة بنجاح، يمكنك الآن التوجه لموقع الاستلام.',
+            donation 
+        });
+
     } catch (error) {
+        console.error("Driver Accept Error:", error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
