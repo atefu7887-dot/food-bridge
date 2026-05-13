@@ -511,33 +511,38 @@ router.get('/driver/available-tasks', async (req, res) => {
 });
 
 // donations.js - تعديل مسار طلب السائق من الماركت
+// تعديل مسار طلب السائق (driver-request)
 router.patch('/:id/driver-request', async (req, res) => {
     try {
         const { driverId } = req.body;
         const donation = await Donation.findById(req.params.id).populate('receiver');
 
         if (!donation) return res.status(404).json({ success: false, message: 'المهمة غير موجودة' });
-        if (donation.driver) return res.status(400).json({ success: false, message: 'هذه المهمة تم حجزها بالفعل' });
+        
+        // منع الاقتناص إذا كان هناك سائق بالفعل
+        if (donation.driver) {
+            return res.status(400).json({ success: false, message: 'هذه المهمة محجوزة أو بانتظار موافقة لسائق آخر' });
+        }
 
+        // --- المنطق الصحيح هنا ---
         donation.driver = driverId; 
-        donation.status = 'Assigned'; 
-        
-        // --- إضافة هذا السطر للتفرقة ---
-        // 'Pending' تعني السائق طلب والجمعية لم توافق بعد
-        donation.driverRequestStatus = 'Pending'; 
-        
+        donation.status = 'Assigned'; // الحالة العامة
+        donation.driverRequestStatus = 'Pending'; // السائق طلب والجمعية لم توافق بعد
         await donation.save();
 
+        // إشعار للجمعية
         if (donation.receiver && donation.receiver.fcmToken) {
-            const driver = await User.findById(driverId);
             sendNotification(
                 donation.receiver.fcmToken,
                 "طلب توصيل جديد 🚚",
-                `السائق (${driver.username}) يرغب في توصيل طلبك.`
+                `هناك سائق يرغب في توصيل طلبك (${donation.title}). يرجى الدخول للموافقة.`
             );
         }
 
-        res.status(200).json({ success: true, message: 'تم إرسال طلبك للجمعية.' });
+        res.status(200).json({ 
+            success: true, 
+            message: 'تم إرسال طلبك للجمعية، في انتظار موافقتهم.' 
+        });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
