@@ -121,23 +121,30 @@ router.get('/available-drivers', async (req, res) => {
     }
 });
 
+// ✅ مسار موافقة الجمعية على السائق (المعدل)
 router.patch('/:id/assign-driver', async (req, res) => {
     try {
         const { driverId } = req.body;
         const donation = await Donation.findById(req.params.id);
 
-        if (!donation) return res.status(404).json({ success: false, message: 'Donation not found' });
+        if (!donation) return res.status(404).json({ success: false, message: 'الطلب غير موجود' });
 
+        // 1. تعيين السائق
         donation.driver = driverId;
-        donation.status = 'Assigned';
+        donation.status = 'Assigned'; 
         
-        // 🛑 السطر الأهم الذي يجعل الإشعار يختفي ويظهر عند السائق 🛑
+        // 2. 🛑 السطر الأهم: تحويل الحالة لـ Approved لكي يختفي الطلب من قائمة "الانتظار"
         donation.driverRequestStatus = 'Approved'; 
         
         donation.timeline.assignedAt = Date.now(); 
         await donation.save();
 
-        res.status(200).json({ success: true });
+        // 3. جلب البيانات محدثة لإرجاعها
+        const populated = await Donation.findById(donation._id)
+            .populate('driver', 'username phone avatar')
+            .populate('receiver', 'username phone');
+
+        res.status(200).json({ success: true, donation: populated });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
