@@ -1,6 +1,6 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
-const jwt = require('jsonwebtoken'); 
+const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const axios = require('axios');
 const FormData = require('form-data');
@@ -18,7 +18,7 @@ const generateToken = (user) => {
     return jwt.sign(
         { id: user._id, role: user.role },
         JWT_SECRET,
-        { expiresIn: '30d' } 
+        { expiresIn: '30d' }
     );
 };
 
@@ -40,7 +40,7 @@ async function uploadToImgBB(buffer) {
 }
 
 //////////////////////////////////////////////////
-// 1. REGISTER (مع إضافة Token)
+// 1. REGISTER
 //////////////////////////////////////////////////
 
 router.post('/register', uploadFields, async (req, res) => {
@@ -70,13 +70,13 @@ router.post('/register', uploadFields, async (req, res) => {
         const createdUser = await User.create(userData);
         const newUser = await User.findById(createdUser._id).populate('availability');
 
-       
+
         const token = generateToken(newUser);
 
         return res.status(201).json({
             success: true,
             message: 'User created successfully 🎉',
-            token: token, 
+            token: token,
             user: newUser
         });
     } catch (error) {
@@ -85,7 +85,7 @@ router.post('/register', uploadFields, async (req, res) => {
 });
 
 //////////////////////////////////////////////////
-// 2. LOGIN (مع إضافة Token)
+// 2. LOGIN 
 //////////////////////////////////////////////////
 
 router.post('/login', async (req, res) => {
@@ -101,7 +101,7 @@ router.post('/login', async (req, res) => {
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) return res.status(400).json({ success: false, message: 'Wrong password' });
 
-      
+
         const token = generateToken(user);
 
         const userObj = user.toObject();
@@ -110,7 +110,7 @@ router.post('/login', async (req, res) => {
         return res.status(200).json({
             success: true,
             message: 'Login successful ✅',
-            token: token, 
+            token: token,
             user: userObj
         });
     } catch (error) {
@@ -118,44 +118,34 @@ router.post('/login', async (req, res) => {
     }
 });
 
+//////////////////////////////////////////////////
+// 3. UPDATE PROFILE
+//////////////////////////////////////////////////
+
 router.put('/update-profile/:userId', upload.single('avatar'), async (req, res) => {
     try {
         const { userId } = req.params;
         let updateData = { ...req.body };
-
-        // 1. فك تشفير بيانات availability القادمة من الموبايل
         if (updateData.availability && typeof updateData.availability === 'string') {
             const availObj = JSON.parse(updateData.availability);
-
-            // 2. ابحث عن المستخدم لتعرف ما إذا كان لديه سجل availability سابق
             const user = await User.findById(userId);
-
             if (user.availability) {
-                // تحديث السجل الموجود فعلياً في جدول Availability
                 await Availability.findByIdAndUpdate(user.availability, availObj);
             } else {
-                // إذا لم يكن لديه سجل، أنشئ واحداً جديداً
                 const newAvail = await Availability.create(availObj);
-                // اربط المعرف الجديد ببيانات تحديث المستخدم
                 updateData.availability = newAvail._id;
             }
-            
-            // 🛑 هام: إذا قمنا بتحديث السجل الموجود، نحذف الحقل من updateData 
-            // لكي لا يحاول Mongoose وضع الـ Object مكان الـ ID ويحدث خطأ الـ Cast
+
             if (user.availability) {
                 delete updateData.availability;
             }
         }
-
-        // 3. معالجة الصورة
         if (req.file) {
             updateData.avatar = await uploadToImgBB(req.file.buffer);
         }
-
-        // 4. تحديث بيانات المستخدم النهائية
         const updatedUser = await User.findByIdAndUpdate(
-            userId, 
-            updateData, 
+            userId,
+            updateData,
             { new: true }
         ).populate('availability');
 
