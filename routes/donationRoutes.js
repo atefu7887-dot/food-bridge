@@ -178,27 +178,15 @@ router.patch('/:id/driver-accept', async (req, res) => {
 // 5. ❌ رفض السائق للمهمة
 router.patch('/:id/driver-reject', async (req, res) => {
     try {
-        const donation = await Donation.findById(req.params.id).populate('receiver');
+        const donation = await Donation.findById(req.params.id);
+        if (!donation) return res.status(404).json({ success: false, message: 'Not found' });
 
-        if (!donation) return res.status(404).json({ success: false, message: 'الطلب غير موجود' });
-
-        donation.driver = null; 
-        donation.status = 'Accepted'; // يعود متاحاً في السوق
+        donation.driver = null; // مسح السائق
+        donation.driverRequestStatus = null; // مسح طلب السائق
+        donation.status = 'Accepted'; // إعادة الحالة ليكون متاحاً في السوق
+        
         await donation.save();
-
-        // 🔔 إرسال إشعار للجمعية (الـ Receiver)
-        if (donation.receiver && donation.receiver.fcmToken) {
-            sendNotification(
-                donation.receiver.fcmToken,
-                "نعتذر، السائق رفض المهمة ⚠️",
-                `اعتذر السائق عن توصيل طلب (${donation.title}). الطلب متاح الآن لتعيين سائق آخر.`
-            );
-        }
-
-        res.status(200).json({ 
-            success: true, 
-            message: 'تم رفض المهمة، وإعادة الطلب لقائمة الانتظار.' 
-        });
+        res.status(200).json({ success: true, message: 'Driver rejected and task is back to market' });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -568,16 +556,24 @@ router.patch('/:id/assign-driver', async (req, res) => {
         const { driverId } = req.body;
         const donation = await Donation.findById(req.params.id);
 
+        if (!donation) return res.status(404).json({ success: false, message: 'Donation not found' });
+
+        // التعديل الجوهري هنا:
         donation.driver = driverId;
         donation.status = 'Assigned';
         
-        // --- هنا نجعلها Approved مباشرة لأن الجمعية هي من اختارت ---
+        // 🛑 تغيير الحالة لـ Approved لكي يظهر زر CONFIRM عند السائق 🛑
         donation.driverRequestStatus = 'Approved'; 
         
         donation.timeline.assignedAt = Date.now(); 
         await donation.save();
-        
-        res.status(200).json({ success: true });
+
+        // إرجاع البيانات كاملة للفلاتر
+        const populated = await Donation.findById(donation._id)
+            .populate('driver', 'username phone avatar')
+            .populate('receiver', 'username phone');
+
+        res.status(200).json({ success: true, donation: populated });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
