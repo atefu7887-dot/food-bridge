@@ -510,21 +510,23 @@ router.get('/driver/available-tasks', async (req, res) => {
     }
 });
 
-// البحث عن السطر 378 في donations.js وتعديله كالتالي:
+// donations.js - تعديل مسار طلب السائق من الماركت
 router.patch('/:id/driver-request', async (req, res) => {
     try {
         const { driverId } = req.body;
         const donation = await Donation.findById(req.params.id).populate('receiver');
 
         if (!donation) return res.status(404).json({ success: false, message: 'المهمة غير موجودة' });
-
         if (donation.driver) return res.status(400).json({ success: false, message: 'هذه المهمة تم حجزها بالفعل' });
 
-        // --- التعديل الجوهري هنا ---
-        donation.driver = driverId; // نضع السائق بشكل مؤقت
-        donation.status = 'Assigned'; // نغير الحالة لـ Assigned لكي تظهر الأزرار للجمعية
+        donation.driver = driverId; 
+        donation.status = 'Assigned'; 
+        
+        // --- إضافة هذا السطر للتفرقة ---
+        // 'Pending' تعني السائق طلب والجمعية لم توافق بعد
+        donation.driverRequestStatus = 'Pending'; 
+        
         await donation.save();
-        // ---------------------------
 
         if (donation.receiver && donation.receiver.fcmToken) {
             const driver = await User.findById(driverId);
@@ -536,6 +538,27 @@ router.patch('/:id/driver-request', async (req, res) => {
         }
 
         res.status(200).json({ success: true, message: 'تم إرسال طلبك للجمعية.' });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// تعديل مسار assign-driver (عندما تختار الجمعية السائق بنفسها)
+router.patch('/:id/assign-driver', async (req, res) => {
+    try {
+        const { driverId } = req.body;
+        const donation = await Donation.findById(req.params.id);
+
+        donation.driver = driverId;
+        donation.status = 'Assigned';
+        
+        // --- هنا نجعلها Approved مباشرة لأن الجمعية هي من اختارت ---
+        donation.driverRequestStatus = 'Approved'; 
+        
+        donation.timeline.assignedAt = Date.now(); 
+        await donation.save();
+        
+        res.status(200).json({ success: true });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
