@@ -294,7 +294,10 @@ router.patch('/:id/update-status', async (req, res) => {
     }
 });
 
-// جلب التبرعات النشطة فقط (التي لم تنتهِ بعد)
+//////////////////////////////////////////////////
+// 📋 GET ACTIVE DONATIONS ONLY (Excluding completed ones)
+//////////////////////////////////////////////////
+
 router.get('/donor-active/:donorId', async (req, res) => {
     try {
         const activeDonations = await Donation.find({
@@ -315,7 +318,10 @@ router.get('/donor-active/:donorId', async (req, res) => {
     }
 });
 
-// ❌ مسار إلغاء التبرع (Delete Donation)
+//////////////////////////////////////////////////
+// ❌ CANCEL DONATION (Delete Donation)
+//////////////////////////////////////////////////
+
 router.delete('/:id/cancel', async (req, res) => {
     try {
         const donationId = req.params.id;
@@ -342,7 +348,9 @@ router.delete('/:id/cancel', async (req, res) => {
 });
 
 
-// 📝 تعديل بيانات التبرع (Update Donation)
+//////////////////////////////////////////////////
+// 📝 UPDATE DONATION DETAILS
+//////////////////////////////////////////////////
 
 router.patch('/:id/update', upload.array('photos', 5), async (req, res) => {
     try {
@@ -394,6 +402,10 @@ router.patch('/:id/update', upload.array('photos', 5), async (req, res) => {
     }
 });
 
+//////////////////////////////////////////////////
+// 📥 NGO REQUEST TO CLAIM DONATION
+//////////////////////////////////////////////////
+
 router.patch('/:id/claim', async (req, res) => {
     try {
         const { receiverId } = req.body;
@@ -423,6 +435,10 @@ router.patch('/:id/claim', async (req, res) => {
     }
 });
 
+//////////////////////////////////////////////////
+// ✅ DONOR APPROVAL OF NGO CLAIM
+//////////////////////////////////////////////////
+
 router.patch('/:id/approve-claim', async (req, res) => {
     try {
         const donation = await Donation.findByIdAndUpdate(
@@ -440,7 +456,10 @@ router.patch('/:id/approve-claim', async (req, res) => {
     }
 });
 
-// ❌ مسار الرفض
+//////////////////////////////////////////////////
+// ❌ REJECT NGO CLAIM (Donor Decision)
+//////////////////////////////////////////////////
+
 router.patch('/:id/reject-claim', async (req, res) => {
     try {
         const donation = await Donation.findById(req.params.id).populate('receiver');
@@ -450,16 +469,19 @@ router.patch('/:id/reject-claim', async (req, res) => {
         donation.status = 'Pending';
         await donation.save();
 
-        // 🔔 إرسال إشعار للجمعية بالرفض
+        
         if (receiver && receiver.fcmToken) {
             sendNotification(receiver.fcmToken, "نعتذر منك 😔", "تم رفض طلب الاستلام من قبل المتبرع.");
         }
 
         res.status(200).json({ success: true, message: 'تم رفض الطلب وإعادة التبرع للقائمة' });
-    } catch (error) { /* error handling */ }
+    } catch (error) {  }
 });
 
-// 📍 تحديث موقع السائق اللحظي (للتتبع على الخريطة)
+//////////////////////////////////////////////////
+// 📍 UPDATE DRIVER LIVE LOCATION (Map Tracking)
+//////////////////////////////////////////////////
+
 router.patch('/:id/update-location', async (req, res) => {
     try {
         const { lat, lng } = req.body;
@@ -474,11 +496,13 @@ router.patch('/:id/update-location', async (req, res) => {
     }
 });
 
-// 🚚 جلب المهام المتاحة في السوق (التي وافق عليها المتبرع ولم يحجزها سائق بعد)
+//////////////////////////////////////////////////
+// 🚚 GET AVAILABLE TASKS (Driver Marketplace)
+//////////////////////////////////////////////////
+
 router.get('/driver/available-tasks', async (req, res) => {
     try {
-        // نبحث عن الطلبات التي حالتها Accepted (تمت موافقة المتبرع) 
-        // وبشرط أن يكون حقل السائق فارغاً
+     
         const tasks = await Donation.find({ 
             status: 'Accepted', 
             driver: null 
@@ -493,10 +517,13 @@ router.get('/driver/available-tasks', async (req, res) => {
     }
 });
 
-// 4. ✅ قبول السائق للمهمة (المعدل لفرض نظام موافقة الجمعية)
+//////////////////////////////////////////////////
+// ✅ DRIVER TASK ACCEPTANCE (NGO Approval Required)
+//////////////////////////////////////////////////
+
 router.patch('/:id/driver-accept', async (req, res) => {
     try {
-        // عمل populate لجلب بيانات الجمعية (receiver) لإرسال الإشعارات لاحقاً
+      
         const donation = await Donation.findById(req.params.id).populate('receiver');
         
         if (!donation) {
@@ -533,7 +560,10 @@ router.patch('/:id/driver-accept', async (req, res) => {
     }
 });
 
-// تعديل مسار assign-driver (عندما تختار الجمعية السائق بنفسها)
+//////////////////////////////////////////////////
+// 🚚 ASSIGN DRIVER (When NGO selects a specific driver)
+//////////////////////////////////////////////////
+
 router.patch('/:id/assign-driver', async (req, res) => {
     try {
         const { driverId } = req.body;
@@ -559,37 +589,10 @@ router.patch('/:id/assign-driver', async (req, res) => {
     }
 });
 
-// ⚡ ميزة "الاقتناص الحر" للسائق
-router.patch('/:id/driver-pickup-anyway', async (req, res) => {
-    try {
-        const { driverId } = req.body;
-        const donation = await Donation.findById(req.params.id);
+//////////////////////////////////////////////////
+// 🚚 DRIVER TASK REQUEST (From Marketplace)
+//////////////////////////////////////////////////
 
-        if (!donation || donation.status !== 'Pending') {
-            return res.status(400).json({ success: false, message: 'التبرع محجوز أو غير متاح' });
-        }
-
-        // السائق بيحجز الطلب لنفسه قبل ما أي جمعية تدخل
-        donation.driver = driverId;
-        donation.status = 'Picked Up'; // هنعتبره استلم فعلياً أو في طريقه للاستلام
-        donation.timeline.pickedUpAt = Date.now();
-        
-        await donation.save();
-
-        // 💡 ترشيح أقرب جمعية للسائق عشان يوديلها الأكل
-        const nearestNGO = await User.findOne({ role: 'Receiver' }); // ممكن تحسنها بـ Location
-
-        res.status(200).json({ 
-            success: true, 
-            message: 'تم حجز التبرع، يرجى التوجه للاستلام وتوصيله لأقرب جمعية',
-            suggestedNGO: nearestNGO 
-        });
-    } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
-    }
-});
-
-// إضافة مسار طلب السائق للمهمة من الماركت
 router.patch('/:id/driver-request', async (req, res) => {
     try {
         const { driverId } = req.body;
