@@ -6,13 +6,12 @@ const FormData = require('form-data');
 const Donation = require('../models/Donation');
 const User = require('../models/User');
 
-// إعداد multer لتخزين الصور في الذاكرة المؤقتة
+
 const upload = multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: 5 * 1024 * 1024 }
 });
 
-// دالة رفع الصور إلى ImgBB
 async function uploadToImgBB(buffer) {
     const apiKey = "e588c3e5bae57852fb441c6f15619cad";
     const formData = new FormData();
@@ -31,7 +30,10 @@ async function uploadToImgBB(buffer) {
     }
 }
 
-// ➕ إضافة تبرع جديد (معدل لدعم المواقع الدقيقة على الخريطة)
+//////////////////////////////////////////////////
+// ➕ ADD NEW DONATION 
+//////////////////////////////////////////////////
+
 router.post('/add', upload.array('photos', 5), async (req, res) => {
     try {
         const {
@@ -42,30 +44,26 @@ router.post('/add', upload.array('photos', 5), async (req, res) => {
             quantity,
             vegQty,
             nonVegQty,
-            location, // العنوان النصي
-            lat,      // خط العرض (Latitude) من الخريطة
-            lng,      // خط الطول (Longitude) من الخريطة
+            location, 
+            lat,      
+            lng,      
             contactPhone,
             expiryDate,
             expiryTime,
             isQualityAssured,
             receiverId
         } = req.body;
-
-        // 1. التحقق من وجود المتبرع
+        
         const donor = await User.findById(donorId);
         if (!donor) {
             return res.status(400).json({ success: false, message: 'Donor not found' });
         }
 
-        // 2. رفع الصور إلى ImgBB (إذا وجدت)
         let imageUrls = [];
         if (req.files && req.files.length > 0) {
             const uploadPromises = req.files.map(file => uploadToImgBB(file.buffer));
             imageUrls = await Promise.all(uploadPromises);
         }
-
-        // 3. إنشاء كائن التبرع الجديد مع الإحداثيات
         const newDonation = new Donation({
             donor: donorId,
             receiver: receiverId || null,
@@ -78,24 +76,20 @@ router.post('/add', upload.array('photos', 5), async (req, res) => {
                 nonVeg: parseInt(nonVegQty) || 0
             },
             images: imageUrls,
-            // --- التعديل هنا: تخزين بيانات الموقع بدقة ---
-            location: location, // العنوان النصي للوصف
+            location: location, 
             pickupLocation: {
                 lat: parseFloat(lat),
                 lng: parseFloat(lng),
                 address: location
             },
-            // ------------------------------------------
+       
             contactPhone: contactPhone || donor.phone,
             expiryDate,
             expiryTime,
             isQualityAssured: isQualityAssured === 'true' || isQualityAssured === true,
             status: 'Pending'
         });
-
-        // 4. حفظ في قاعدة البيانات
         await newDonation.save();
-
         res.status(201).json({ 
             success: true, 
             message: "Donation created successfully!", 
@@ -108,10 +102,13 @@ router.post('/add', upload.array('photos', 5), async (req, res) => {
     }
 });
 
-// 2. 🚚 جلب قائمة السائقين المتاحين (حل مشكلة القائمة الفارغة)
+//////////////////////////////////////////////////
+// 2. Select driver
+//////////////////////////////////////////////////
+
 router.get('/available-drivers', async (req, res) => {
     try {
-        // نبحث عن المستخدمين الذين دورهم 'Driver'
+      
         const drivers = await User.find({ role: 'Driver' })
             .select('username phone avatar')
             .lean();
@@ -121,25 +118,20 @@ router.get('/available-drivers', async (req, res) => {
     }
 });
 
-// ✅ مسار موافقة الجمعية على السائق (المعدل)
+//////////////////////////////////////////////////
+// ✅ NGO APPROVAL FOR DRIVER (Updated)
+//////////////////////////////////////////////////
+
 router.patch('/:id/assign-driver', async (req, res) => {
     try {
         const { driverId } = req.body;
         const donation = await Donation.findById(req.params.id);
-
         if (!donation) return res.status(404).json({ success: false, message: 'الطلب غير موجود' });
-
-        // 1. تعيين السائق
         donation.driver = driverId;
         donation.status = 'Assigned'; 
-        
-        // 2. 🛑 السطر الأهم: تحويل الحالة لـ Approved لكي يختفي الطلب من قائمة "الانتظار"
         donation.driverRequestStatus = 'Approved'; 
-        
         donation.timeline.assignedAt = Date.now(); 
         await donation.save();
-
-        // 3. جلب البيانات محدثة لإرجاعها
         const populated = await Donation.findById(donation._id)
             .populate('driver', 'username phone avatar')
             .populate('receiver', 'username phone');
@@ -150,10 +142,13 @@ router.patch('/:id/assign-driver', async (req, res) => {
     }
 });
 
-// 4. ✅ قبول السائق للمهمة
+//////////////////////////////////////////////////
+// 4. ✅ DRIVER ACCEPTANCE OF TASK
+//////////////////////////////////////////////////
+
 router.patch('/:id/driver-accept', async (req, res) => {
     try {
-        // نقوم بعمل populate للـ receiver لجلب بياناته (مثل fcmToken)
+      
         const donation = await Donation.findById(req.params.id).populate('receiver');
         
         if (!donation) return res.status(404).json({ success: false, message: 'الطلب غير موجود' });
@@ -161,7 +156,6 @@ router.patch('/:id/driver-accept', async (req, res) => {
         donation.status = 'Accepted';
         await donation.save();
 
-        // 🔔 إرسال إشعار للجمعية (الـ Receiver)
         if (donation.receiver && donation.receiver.fcmToken) {
             sendNotification(
                 donation.receiver.fcmToken,
@@ -180,15 +174,18 @@ router.patch('/:id/driver-accept', async (req, res) => {
     }
 });
 
-// 5. ❌ رفض السائق للمهمة
+//////////////////////////////////////////////////
+// 5. ❌ DRIVER REJECTION OF TASK
+//////////////////////////////////////////////////
+
 router.patch('/:id/driver-reject', async (req, res) => {
     try {
         const donation = await Donation.findById(req.params.id);
         if (!donation) return res.status(404).json({ success: false, message: 'Not found' });
 
-        donation.driver = null; // مسح السائق
-        donation.driverRequestStatus = null; // مسح طلب السائق
-        donation.status = 'Accepted'; // إعادة الحالة ليكون متاحاً في السوق
+        donation.driver = null; 
+        donation.driverRequestStatus = null; 
+        donation.status = 'Accepted'; 
         
         await donation.save();
         res.status(200).json({ success: true, message: 'Driver rejected and task is back to market' });
@@ -197,7 +194,10 @@ router.patch('/:id/driver-reject', async (req, res) => {
     }
 });
 
-// 6. 👤 عرض تاريخ تبرعات المتبرع
+//////////////////////////////////////////////////
+// 6. 👤 GET DONOR DONATION HISTORY
+//////////////////////////////////////////////////
+
 router.get('/donor-donations/:donorId', async (req, res) => {
     try {
         const donations = await Donation.find({ donor: req.params.donorId })
@@ -210,7 +210,10 @@ router.get('/donor-donations/:donorId', async (req, res) => {
     }
 });
 
-// 7. 🔍 التبرعات المتاحة للجمعيات
+//////////////////////////////////////////////////
+// 7. 🔍 GET AVAILABLE DONATIONS FOR NGOs
+//////////////////////////////////////////////////
+
 router.get('/available-for-ngo', async (req, res) => {
     try {
         const donations = await Donation.find({ status: 'Pending', receiver: null })
@@ -221,7 +224,10 @@ router.get('/available-for-ngo', async (req, res) => {
     }
 });
 
-// 8. 📥 حجز تبرع من قبل الجمعية
+//////////////////////////////////////////////////
+// 8. 📥 RESERVE DONATION BY NGO
+//////////////////////////////////////////////////
+
 router.patch('/:id/request-donation', async (req, res) => {
     try {
         const { receiverId } = req.body;
@@ -248,7 +254,10 @@ router.get('/my-ngo-donations/:receiverId', async (req, res) => {
     }
 });
 
-// 10. 📋 مهام السائق
+//////////////////////////////////////////////////
+// 10. 📋 DRIVER TASKS (Current Assignments)
+//////////////////////////////////////////////////
+
 router.get('/my-tasks/:driverId', async (req, res) => {
     try {
         const tasks = await Donation.find({ driver: req.params.driverId })
@@ -290,7 +299,7 @@ router.get('/donor-active/:donorId', async (req, res) => {
     try {
         const activeDonations = await Donation.find({
             donor: req.params.donorId,
-            status: { $ne: 'Delivered' } // أي حالة غير 'تم التوصيل'
+            status: { $ne: 'Delivered' } 
         })
             .populate('receiver', 'username avatar address')
             .populate('driver', 'username phone avatar')
@@ -311,15 +320,12 @@ router.delete('/:id/cancel', async (req, res) => {
     try {
         const donationId = req.params.id;
 
-        // البحث عن التبرع للتأكد من حالته قبل الحذف
+       
         const donation = await Donation.findById(donationId);
 
         if (!donation) {
             return res.status(404).json({ success: false, message: 'Donation not found' });
         }
-
-        // 🛡️ شرط أمان: لا يمكن الإلغاء إلا إذا كانت الحالة Pending
-        // لو الجمعية وافقت أو السائق استلم، مينفعش المتبرع يحذف فجأة
         if (donation.status !== 'Pending') {
             return res.status(400).json({
                 success: false,
@@ -337,34 +343,28 @@ router.delete('/:id/cancel', async (req, res) => {
 
 
 // 📝 تعديل بيانات التبرع (Update Donation)
-// يسمح بالتعديل فقط إذا كانت الحالة لا تزال Pending
+
 router.patch('/:id/update', upload.array('photos', 5), async (req, res) => {
     try {
         const donationId = req.params.id;
         const { title, foodType, itemDetails, quantity, vegQty, nonVegQty, location, contactPhone } = req.body;
 
-        // 1. البحث عن التبرع
+       
         const donation = await Donation.findById(donationId);
         if (!donation) {
             return res.status(404).json({ success: false, message: 'Donation not found' });
         }
-
-        // 2. 🛡️ شرط الأمان: التعديل مسموح فقط في حالة الانتظار Pending
         if (donation.status !== 'Pending') {
             return res.status(400).json({
                 success: false,
                 message: 'لا يمكن تعديل التبرع بعد أن تم قبوله أو البدء في توصيله.'
             });
         }
-
-        // 3. معالجة الصور الجديدة إذا تم رفعها
-        let imageUrls = donation.images; // الاحتفاظ بالصور القديمة كافتراضي
+        let imageUrls = donation.images; 
         if (req.files && req.files.length > 0) {
             const uploadPromises = req.files.map(file => uploadToImgBB(file.buffer));
-            imageUrls = await Promise.all(uploadPromises); // استبدال الصور القديمة بالجديدة
+            imageUrls = await Promise.all(uploadPromises); 
         }
-
-        // 4. تحديث البيانات
         const updatedDonation = await Donation.findByIdAndUpdate(
             donationId,
             {
@@ -380,7 +380,7 @@ router.patch('/:id/update', upload.array('photos', 5), async (req, res) => {
                 location,
                 contactPhone
             },
-            { new: true } // لإرجاع البيانات الجديدة بعد التعديل
+            { new: true } 
         );
 
         res.status(200).json({
@@ -394,8 +394,6 @@ router.patch('/:id/update', upload.array('photos', 5), async (req, res) => {
     }
 });
 
-// في ملف routes/donations.js
-
 router.patch('/:id/claim', async (req, res) => {
     try {
         const { receiverId } = req.body;
@@ -405,13 +403,11 @@ router.patch('/:id/claim', async (req, res) => {
         if (!donation || donation.receiver) {
             return res.status(400).json({ success: false, message: 'تبرع غير موجود أو محجوز مسبقاً' });
         }
-
-        // تحديث التبرع
+     
         donation.receiver = receiverId;
-        donation.status = 'Pending Approval'; // حالة الانتظار
+        donation.status = 'Pending Approval';
         await donation.save();
-
-        // 🔔 إرسال إشعار للمتبرع
+    
         const donor = donation.donor;
         if (donor && donor.fcmToken) {
             sendNotification(
@@ -427,21 +423,16 @@ router.patch('/:id/claim', async (req, res) => {
     }
 });
 
-// ✅ مسار الموافقة
-// ✅ مسار موافقة المتبرع المحدث
 router.patch('/:id/approve-claim', async (req, res) => {
     try {
         const donation = await Donation.findByIdAndUpdate(
             req.params.id,
             { 
-                status: 'Accepted', // تصبح متاحة في سوق السائقين
-                driver: null        // التأكد أنها بدون سائق لكي تظهر للجميع
+                status: 'Accepted', 
+                driver: null       
             },
             { new: true }
         ).populate('receiver');
-
-        // إشعار عام للسائقين القريبين (اختياري عبر Socket.io أو FCM)
-        // broadcastToDrivers("هناك طعام جاهز للاستلام بالقرب منك!");
 
         res.status(200).json({ success: true, message: 'تمت الموافقة، المهمة الآن معروضة للسائقين في السوق.' });
     } catch (error) {
@@ -455,7 +446,6 @@ router.patch('/:id/reject-claim', async (req, res) => {
         const donation = await Donation.findById(req.params.id).populate('receiver');
         const receiver = donation.receiver;
 
-        // إعادة التبرع للحالة العامة وحذف الجمعية منه
         donation.receiver = null;
         donation.status = 'Pending';
         await donation.save();
@@ -512,29 +502,17 @@ router.patch('/:id/driver-accept', async (req, res) => {
         if (!donation) {
             return res.status(404).json({ success: false, message: 'الطلب غير موجود' });
         }
-
-        /**
-         * 🛑 التعديل الأهم: الحماية من الاقتناص المنفرد
-         * نتحقق من حقل driverRequestStatus:
-         * - إذا كان 'Pending': يعني السائق أرسل طلباً والجمعية لم توافق بعد (ممنوع القبول).
-         * - إذا كان 'Approved' أو null (في حالة التعيين المباشر): مسموح للسائق التأكيد.
-         */
         if (donation.driverRequestStatus === 'Pending') {
             return res.status(403).json({ 
                 success: false, 
                 message: 'لا يمكنك تأكيد استلام المهمة قبل أن توافق الجمعية على طلبك أولاً.' 
             });
         }
-
-        // تحديث حالة التبرع لتصبح مقبولة رسمياً من الطرفين
         donation.status = 'Accepted';
         
-        // نغير حالة الطلب ليكون مؤكداً تماماً
         donation.driverRequestStatus = 'Approved'; 
         
         await donation.save();
-
-        // 🔔 إرسال إشعار للجمعية (الـ Receiver) بأن السائق أكد المهمة وسيبدأ التحرك
         if (donation.receiver && donation.receiver.fcmToken) {
             sendNotification(
                 donation.receiver.fcmToken,
@@ -563,17 +541,14 @@ router.patch('/:id/assign-driver', async (req, res) => {
 
         if (!donation) return res.status(404).json({ success: false, message: 'Donation not found' });
 
-        // التعديل الجوهري هنا:
         donation.driver = driverId;
         donation.status = 'Assigned';
         
-        // 🛑 تغيير الحالة لـ Approved لكي يظهر زر CONFIRM عند السائق 🛑
         donation.driverRequestStatus = 'Approved'; 
         
         donation.timeline.assignedAt = Date.now(); 
         await donation.save();
 
-        // إرجاع البيانات كاملة للفلاتر
         const populated = await Donation.findById(donation._id)
             .populate('driver', 'username phone avatar')
             .populate('receiver', 'username phone');
@@ -623,8 +598,6 @@ router.patch('/:id/driver-request', async (req, res) => {
         if (!donation) {
             return res.status(404).json({ success: false, message: 'Donation not found' });
         }
-
-        // تحديث البيانات
         donation.driver = driverId;
         donation.driverRequestStatus = 'Pending';
         donation.status = 'Assigned';

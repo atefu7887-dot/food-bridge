@@ -4,12 +4,11 @@ const bcrypt = require('bcryptjs');
 const nodemailer = require('nodemailer');
 const User = require('../models/User');
 
-// //* إعداد ناقل البريد الإلكتروني (Transporter) لمرة واحدة لزيادة الكفاءة
 const transporter = nodemailer.createTransport({
     service: 'Gmail',
     auth: {
         user: 'atefu7887@gmail.com',
-        pass: 'spcp xjmf kbbt gvqf', // تأكد أن خاصية App Password مفعلة في حسابك
+        pass: 'spcp xjmf kbbt gvqf', 
     },
 });
 
