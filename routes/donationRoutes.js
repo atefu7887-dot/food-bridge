@@ -510,30 +510,35 @@ router.get('/driver/available-tasks', async (req, res) => {
     }
 });
 
-// ⚡ ميزة الاقتناص: السائق يحجز المهمة لنفسه فوراً
-router.patch('/:id/driver-claim', async (req, res) => {
+// 🚚 السائق يرسل طلب للجمعية لتوصيل المهمة
+router.patch('/:id/driver-request', async (req, res) => {
     try {
         const { driverId } = req.body;
-        const donation = await Donation.findById(req.params.id);
+        const donation = await Donation.findById(req.params.id).populate('receiver');
 
         if (!donation) return res.status(404).json({ success: false, message: 'المهمة غير موجودة' });
 
-        // التأكد أن المهمة لم يحجزها سائق آخر في نفس اللحظة
+        // التأكد أن المهمة لم يتم تسليمها لسائق آخر بعد
         if (donation.driver) {
-            return res.status(400).json({ success: false, message: 'عذراً، قام سائق آخر باقتناص هذه المهمة للتو!' });
+            return res.status(400).json({ success: false, message: 'هذه المهمة تم حجزها بالفعل' });
         }
 
-        donation.driver = driverId;
-        donation.status = 'Assigned'; // تحويل الحالة لـ "تم التعيين"
-        donation.driverRequestStatus = 'Accepted'; // السائق وافق تلقائياً لأنه هو من ضغط
-        donation.timeline.assignedAt = Date.now();
+        // إرسال إشعار للجمعية (الـ Receiver) بأن هناك سائق مهتم
+        if (donation.receiver && donation.receiver.fcmToken) {
+            const driver = await User.findById(driverId);
+            sendNotification(
+                donation.receiver.fcmToken,
+                "طلب توصيل جديد 🚚",
+                `السائق (${driver.username}) يرغب في توصيل طلبك: ${donation.title}. يرجى الموافقة أو الرفض.`
+            );
+        }
 
-        await donation.save();
-
+        // تحديث حالة الطلب في قاعدة البيانات (اختياري: ممكن تضيف حقل driverRequests)
+        // حالياً سنكتفي بإشعار الجمعية لتقوم هي بالتعيين عبر مسار assign-driver الموجود عندك
+        
         res.status(200).json({ 
             success: true, 
-            message: 'مبروك! المهمة أصبحت ملكك الآن، توجه لنقطة الاستلام.', 
-            donation 
+            message: 'تم إرسال طلبك للجمعية، انتظر موافقتهم لتأكيد المهمة.' 
         });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
