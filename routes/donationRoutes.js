@@ -510,7 +510,7 @@ router.get('/driver/available-tasks', async (req, res) => {
     }
 });
 
-// 🚚 السائق يرسل طلب للجمعية لتوصيل المهمة
+// البحث عن السطر 378 في donations.js وتعديله كالتالي:
 router.patch('/:id/driver-request', async (req, res) => {
     try {
         const { driverId } = req.body;
@@ -518,28 +518,24 @@ router.patch('/:id/driver-request', async (req, res) => {
 
         if (!donation) return res.status(404).json({ success: false, message: 'المهمة غير موجودة' });
 
-        // التأكد أن المهمة لم يتم تسليمها لسائق آخر بعد
-        if (donation.driver) {
-            return res.status(400).json({ success: false, message: 'هذه المهمة تم حجزها بالفعل' });
-        }
+        if (donation.driver) return res.status(400).json({ success: false, message: 'هذه المهمة تم حجزها بالفعل' });
 
-        // إرسال إشعار للجمعية (الـ Receiver) بأن هناك سائق مهتم
+        // --- التعديل الجوهري هنا ---
+        donation.driver = driverId; // نضع السائق بشكل مؤقت
+        donation.status = 'Assigned'; // نغير الحالة لـ Assigned لكي تظهر الأزرار للجمعية
+        await donation.save();
+        // ---------------------------
+
         if (donation.receiver && donation.receiver.fcmToken) {
             const driver = await User.findById(driverId);
             sendNotification(
                 donation.receiver.fcmToken,
                 "طلب توصيل جديد 🚚",
-                `السائق (${driver.username}) يرغب في توصيل طلبك: ${donation.title}. يرجى الموافقة أو الرفض.`
+                `السائق (${driver.username}) يرغب في توصيل طلبك.`
             );
         }
 
-        // تحديث حالة الطلب في قاعدة البيانات (اختياري: ممكن تضيف حقل driverRequests)
-        // حالياً سنكتفي بإشعار الجمعية لتقوم هي بالتعيين عبر مسار assign-driver الموجود عندك
-        
-        res.status(200).json({ 
-            success: true, 
-            message: 'تم إرسال طلبك للجمعية، انتظر موافقتهم لتأكيد المهمة.' 
-        });
+        res.status(200).json({ success: true, message: 'تم إرسال طلبك للجمعية.' });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
