@@ -75,11 +75,12 @@ const userSchema = new mongoose.Schema(
             type: Boolean,
             default: false
         },
-        availability: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'Availability',
-            default: null
-        }
+       availability: {
+        timeSlot: { type: String, default: "" },
+        customTime: { type: String, default: "" },
+        days: [{ type: String }],
+        frequency: { type: String, default: "" }
+    }
 
     },
     {

@@ -1,6 +1,6 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
-const jwt = require('jsonwebtoken'); 
+const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const axios = require('axios');
 const FormData = require('form-data');
@@ -18,7 +18,7 @@ const generateToken = (user) => {
     return jwt.sign(
         { id: user._id, role: user.role },
         JWT_SECRET,
-        { expiresIn: '30d' } 
+        { expiresIn: '30d' }
     );
 };
 
@@ -70,13 +70,13 @@ router.post('/register', uploadFields, async (req, res) => {
         const createdUser = await User.create(userData);
         const newUser = await User.findById(createdUser._id).populate('availability');
 
-       
+
         const token = generateToken(newUser);
 
         return res.status(201).json({
             success: true,
             message: 'User created successfully 🎉',
-            token: token, 
+            token: token,
             user: newUser
         });
     } catch (error) {
@@ -101,7 +101,7 @@ router.post('/login', async (req, res) => {
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) return res.status(400).json({ success: false, message: 'Wrong password' });
 
-      
+
         const token = generateToken(user);
 
         const userObj = user.toObject();
@@ -110,7 +110,7 @@ router.post('/login', async (req, res) => {
         return res.status(200).json({
             success: true,
             message: 'Login successful ✅',
-            token: token, 
+            token: token,
             user: userObj
         });
     } catch (error) {
@@ -123,47 +123,29 @@ router.put('/update-profile/:userId', upload.single('avatar'), async (req, res) 
         const { userId } = req.params;
         let updateData = { ...req.body };
 
-        // 🛑 الخطوة المصيرية: تحويل النص القادم من الموبايل إلى Object 🛑
         if (updateData.availability && typeof updateData.availability === 'string') {
-            try {
-                updateData.availability = JSON.parse(updateData.availability);
-            } catch (e) {
-                console.error("Error parsing availability JSON:", e);
-                // إذا فشل الـ parse نتركها كما هي أو نتعامل مع الخطأ
+            const availObj = JSON.parse(updateData.availability);
+
+            // 1. ابحث عن المستخدم لتعرف الـ ID الخاص بالـ availability
+            const user = await User.findById(userId);
+
+            if (user.availability) {
+                // 2. حدث بيانات الجدول المنفصل
+                await Availability.findByIdAndUpdate(user.availability, availObj);
+            } else {
+                // 3. إذا لم يكن لديه، أنشئ واحداً جديداً واربطه
+                const newAvail = await Availability.create(availObj);
+                updateData.availability = newAvail._id;
             }
+            // نحذفها من الـ updateData لأننا حدثناها يدوياً ولا نريد حدوث Cast Error
+            delete updateData.availability;
         }
 
-        // إذا قام المستخدم برفع صورة جديدة
-        if (req.file) {
-            updateData.avatar = await uploadToImgBB(req.file.buffer);
-        }
-
-        // تحديث البيانات في قاعدة البيانات
-        // ملاحظة: استخدم populate لإرجاع البيانات كاملة للفلاتر
-        const updatedUser = await User.findByIdAndUpdate(
-            userId, 
-            updateData, 
-            { new: true }
-        ).populate('availability');
-
-        if (!updatedUser) {
-            return res.status(404).json({ success: false, message: "User not found" });
-        }
-
-        // إرجاع رد JSON سليم (هذا سيمنع الـ FormatException في فلاتر)
-        res.status(200).json({
-            success: true,
-            message: "Profile updated successfully 🎉",
-            user: updatedUser
-        });
-
+        const updatedUser = await User.findByIdAndUpdate(userId, updateData, { new: true })
+            .populate('availability');
+        res.status(200).json({ success: true, user: updatedUser });
     } catch (error) {
-        console.error("Update Error:", error);
-        // 🛑 تأكد دائماً من إرسال JSON حتى في حالة الخطأ 🛑
-        res.status(500).json({ 
-            success: false, 
-            message: "Internal Server Error: " + error.message 
-        });
+        res.status(500).json({ success: false, message: error.message });
     }
 });
 
