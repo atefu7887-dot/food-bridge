@@ -118,4 +118,53 @@ router.post('/login', async (req, res) => {
     }
 });
 
+router.put('/update-profile/:userId', upload.single('avatar'), async (req, res) => {
+    try {
+        const { userId } = req.params;
+        let updateData = { ...req.body };
+
+        // 🛑 الخطوة المصيرية: تحويل النص القادم من الموبايل إلى Object 🛑
+        if (updateData.availability && typeof updateData.availability === 'string') {
+            try {
+                updateData.availability = JSON.parse(updateData.availability);
+            } catch (e) {
+                console.error("Error parsing availability JSON:", e);
+                // إذا فشل الـ parse نتركها كما هي أو نتعامل مع الخطأ
+            }
+        }
+
+        // إذا قام المستخدم برفع صورة جديدة
+        if (req.file) {
+            updateData.avatar = await uploadToImgBB(req.file.buffer);
+        }
+
+        // تحديث البيانات في قاعدة البيانات
+        // ملاحظة: استخدم populate لإرجاع البيانات كاملة للفلاتر
+        const updatedUser = await User.findByIdAndUpdate(
+            userId, 
+            updateData, 
+            { new: true }
+        ).populate('availability');
+
+        if (!updatedUser) {
+            return res.status(404).json({ success: false, message: "User not found" });
+        }
+
+        // إرجاع رد JSON سليم (هذا سيمنع الـ FormatException في فلاتر)
+        res.status(200).json({
+            success: true,
+            message: "Profile updated successfully 🎉",
+            user: updatedUser
+        });
+
+    } catch (error) {
+        console.error("Update Error:", error);
+        // 🛑 تأكد دائماً من إرسال JSON حتى في حالة الخطأ 🛑
+        res.status(500).json({ 
+            success: false, 
+            message: "Internal Server Error: " + error.message 
+        });
+    }
+});
+
 module.exports = router;
