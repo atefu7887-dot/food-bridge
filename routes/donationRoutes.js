@@ -617,36 +617,22 @@ router.patch('/:id/driver-pickup-anyway', async (req, res) => {
 router.patch('/:id/driver-request', async (req, res) => {
     try {
         const { driverId } = req.body;
-        const donation = await Donation.findById(req.params.id).populate('receiver');
+        const donation = await Donation.findById(req.params.id);
 
         if (!donation) {
-            return res.status(404).json({ success: false, message: 'المهمة غير موجودة' });
+            return res.status(404).json({ success: false, message: 'Donation not found' });
         }
 
-        if (donation.driver) {
-            return res.status(400).json({ success: false, message: 'هذه المهمة محجوزة بالفعل لسائق آخر' });
-        }
-
-        // تحديث البيانات لتعليق الطلب بانتظار موافقة الجمعية
+        // تحديث البيانات
         donation.driver = driverId;
+        donation.driverRequestStatus = 'Pending';
         donation.status = 'Assigned';
-        donation.driverRequestStatus = 'Pending'; // الحقل الذي يمنع الاقتناص الفوري
 
         await donation.save();
 
-        // إرسال إشعار للجمعية
-        if (donation.receiver && donation.receiver.fcmToken) {
-            const driver = await User.findById(driverId);
-            sendNotification(
-                donation.receiver.fcmToken,
-                "طلب توصيل جديد 🚚",
-                `السائق (${driver.username}) يرغب في توصيل طلبك.`
-            );
-        }
-
         res.status(200).json({ 
             success: true, 
-            message: 'تم إرسال طلبك للجمعية، في انتظار موافقتهم.',
+            message: 'Request sent to NGO successfully',
             donation 
         });
     } catch (error) {
